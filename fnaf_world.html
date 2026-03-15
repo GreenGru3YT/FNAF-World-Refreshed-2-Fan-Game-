@@ -2,315 +2,195 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FNaF World - GitHub Adventure</title>
+    <title>FNaF World - Adventure Mode</title>
     <style>
-        :root { --main-blue: #00ccff; --dark-bg: #050505; }
-        body { margin: 0; background: #000; color: #fff; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
-        #game-wrapper { position: relative; width: 800px; height: 600px; margin: 10px auto; border: 4px solid #333; }
-        canvas { display: block; background: #000; }
+        :root { --fnaf-blue: #00aaff; --fnaf-green: #2ecc71; }
+        body { margin: 0; background: #000; color: #fff; font-family: 'Arial', sans-serif; overflow: hidden; }
+        #game-container { position: relative; width: 800px; height: 600px; margin: 10px auto; border: 4px solid #444; background: #000; }
+        canvas { display: block; }
 
-        /* UI Layers */
-        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        .ui-panel { pointer-events: auto; background: rgba(0,0,0,0.9); border: 2px solid var(--main-blue); padding: 15px; }
-        
-        #hud { position: absolute; top: 0; width: 100%; height: 50px; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; box-sizing: border-box; background: rgba(0,0,20,0.8); border-bottom: 2px solid var(--main-blue); }
-        
-        #party-menu { display: none; flex-direction: column; z-index: 100; box-sizing: border-box; }
-        .roster-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; overflow-y: auto; margin: 10px 0; max-height: 400px; }
-        .char-slot { border: 1px solid #444; padding: 5px; text-align: center; cursor: pointer; font-size: 10px; transition: 0.2s; }
-        .char-slot.locked { opacity: 0.2; cursor: default; }
-        .char-slot.active { border-color: #0f0; background: rgba(0,255,0,0.1); }
-        .char-slot:hover:not(.locked) { background: #111; border-color: var(--main-blue); }
+        /* UI HUD */
+        #hud { position: absolute; bottom: 0; width: 100%; height: 60px; background: rgba(0,0,50,0.9); border-top: 3px solid var(--fnaf-blue); display: flex; justify-content: space-around; align-items: center; z-index: 10; }
+        .btn { background: #003366; color: #fff; border: 2px solid var(--fnaf-blue); padding: 5px 15px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn:hover { background: var(--fnaf-blue); color: #000; }
 
-        #battle-ui { position: absolute; bottom: 0; width: 100%; height: 220px; background: linear-gradient(to bottom, #001, #003); border-top: 4px solid var(--main-blue); display: none; grid-template-columns: 250px 1fr; z-index: 50; padding: 10px; box-sizing: border-box; }
+        /* Mendo's Byte Shop */
+        #shop-ui { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); width: 400px; background: #111; border: 3px solid #f0f; padding: 20px; display: none; z-index: 100; text-align: center; }
         
-        .btn { background: #002244; color: var(--main-blue); border: 2px solid var(--main-blue); padding: 8px 15px; cursor: pointer; font-weight: bold; text-transform: uppercase; }
-        .btn:hover { background: var(--main-blue); color: #000; }
-        
-        #msg-box { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); width: 400px; text-align: center; font-size: 20px; color: #0f0; background: rgba(0,0,0,0.8); padding: 20px; display: none; z-index: 200; border: 1px solid #0f0; }
+        /* Battle UI Overlay */
+        #battle-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: none; z-index: 50; }
+        #battle-commands { position: absolute; top: 20px; left: 250px; display: flex; flex-direction: column; gap: 10px; }
+        #enemy-name { position: absolute; top: 20px; left: 20px; font-size: 24px; color: #fff; }
+        #team-hp { position: absolute; top: 20px; right: 20px; text-align: right; }
+        .hp-val { background: #f00; border: 1px solid #fff; padding: 2px 10px; margin-bottom: 5px; font-weight: bold; width: 80px; display: inline-block; }
     </style>
 </head>
 <body>
 
-<div id="game-wrapper">
+<div id="game-container">
     <div id="hud">
-        <div>Tokens: <span id="token-val">0</span></div>
-        <div>
-            <button class="btn" onclick="saveGame()">Save</button>
-            <button class="btn" onclick="toggleParty()">Party</button>
-        </div>
+        <button class="btn">PARTY</button>
+        <button class="btn">CHIPS</button>
+        <button class="btn" onclick="openShop()">BYTES</button>
+        <button class="btn" onclick="saveGame()">SAVE</button>
+        <div style="color:var(--fnaf-blue)">Tokens: <span id="token-count">0</span></div>
     </div>
 
-    <div id="msg-box"></div>
-
-    <div id="party-menu" class="overlay" style="padding: 60px;">
-        <div class="ui-panel">
-            <h2 style="margin:0; color: var(--main-blue);">Party Selection</h2>
-            <p>Select up to 4 characters for your active team.</p>
-            <div id="roster-container" class="roster-grid"></div>
-            <button class="btn" onclick="toggleParty()">Ready to Adventure</button>
-        </div>
+    <div id="shop-ui">
+        <h2 style="color:#f0f">Mendo's Endoskeleton Shop</h2>
+        <p>Buy a Byte to help in battle!</p>
+        <button class="btn" onclick="buyByte(50)">Med-Pod (50 Tokens)</button><br><br>
+        <button class="btn" onclick="closeShop()">Exit Shop</button>
     </div>
 
     <div id="battle-ui">
-        <div id="team-stats" style="display: flex; flex-direction: column; gap: 10px;"></div>
-        <div id="battle-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 20px;"></div>
+        <div id="enemy-name">Auto-Chipper</div>
+        <div id="battle-commands"></div>
+        <div id="team-hp"></div>
     </div>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 </div>
 
 <script>
-/** * CHARACTER DATA & RENDERING 
- * Every character has specific DNA for the procedural renderer
- */
-const ROSTER = [
-    { name: "Freddy", col: "#634", type: "bear", eyes: "#0cf", feat: "hat" },
-    { name: "Bonnie", col: "#54a", type: "bunny", eyes: "#f00", feat: "ears" },
-    { name: "Chica", col: "#eb2", type: "bird", eyes: "#f0f", feat: "bib" },
-    { name: "Foxy", col: "#a33", type: "fox", eyes: "#ff0", feat: "patch" },
-    { name: "Toy Freddy", col: "#853", type: "bear", eyes: "#0cf", feat: "hat" },
-    { name: "Toy Bonnie", col: "#0cf", type: "bunny", eyes: "#0f0", feat: "ears" },
-    { name: "Toy Chica", col: "#ff0", type: "bird", eyes: "#0cf", feat: "bib" },
-    { name: "Mangle", col: "#eee", type: "fox", eyes: "#ff0", feat: "patch" },
-    { name: "BB", col: "#f44", type: "human", eyes: "#0cf", feat: "prop" },
-    { name: "JJ", col: "#f4a", type: "human", eyes: "#f0f", feat: "prop" },
-    { name: "Phantom Freddy", col: "#452", type: "bear", eyes: "#fff", feat: "hat", ghost: true },
-    { name: "Springtrap", col: "#774", type: "bunny", eyes: "#999", feat: "ears", withered: true },
-    { name: "Puppet", col: "#111", type: "human", eyes: "#fff", feat: "face" },
-    { name: "Nightmare", col: "#111", type: "bear", eyes: "#f00", feat: "hat", sharp: true },
-    { name: "Crying Child", col: "#222", type: "human", eyes: "#fff", feat: "tears" },
-    { name: "Fredbear", col: "#fb2", type: "bear", eyes: "#0cf", feat: "hat" }
-];
-
-// Filling the rest with generic slots for the 48-char grid
-for(let i=ROSTER.length; i<48; i++) {
-    ROSTER.push({ name: "Slot "+(i+1), col: "#222", type: "bear", eyes: "#555", feat: "none" });
-}
-
-/** ENGINE STATE */
-let state = {
-    tokens: 0,
-    unlocked: [0, 1, 2, 3], // Freddy, Bonnie, Chica, Foxy
-    party: [0, 1, 2, 3],
-    inGlitch: false,
-    view: 'OVERWORLD',
-    playerPos: { x: 100, y: 460 },
-    currentEnemy: null,
-    challenger: null,
-    keys: {}
-};
-
+/** ENGINE CONFIG **/
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+let tokens = 100;
+let bytesOwned = 0;
+let gameState = 'OVERWORLD';
+let keys = {};
 
-/** * PROCEDURAL DRAWER 
- */
-function drawAnimatronic(x, y, char, scale = 1) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(scale, scale);
-    
-    if (char.ghost) ctx.globalAlpha = 0.5;
+// Camera and World
+const world = { width: 2000, height: 2000 };
+const cam = { x: 0, y: 0 };
+const player = { x: 400, y: 300, speed: 4, char: 'Freddy' };
 
-    // Body & Head
-    ctx.fillStyle = char.col;
-    ctx.fillRect(0, 15, 40, 35); 
-    ctx.fillRect(5, -10, 30, 25);
-    
-    // Feature Logic
-    ctx.fillStyle = "#000";
-    if (char.feat === "hat") { ctx.fillRect(10, -20, 20, 12); ctx.fillRect(5, -12, 30, 4); }
-    if (char.feat === "ears") { ctx.fillStyle = char.col; ctx.fillRect(5, -30, 8, 20); ctx.fillRect(27, -30, 8, 20); }
-    if (char.feat === "patch") { ctx.fillStyle = "#111"; ctx.fillRect(10, -2, 8, 8); }
-    if (char.feat === "tears") { ctx.fillStyle = "#0af"; ctx.fillRect(10, 5, 2, 10); ctx.fillRect(28, 5, 2, 10); }
+/** RENDERING **/
+function drawMap() {
+    // Grass background
+    ctx.fillStyle = '#1a472a';
+    ctx.fillRect(0, 0, 800, 600);
 
-    // Eyes
-    ctx.fillStyle = "#fff"; ctx.fillRect(10, -3, 6, 6); ctx.fillRect(24, -3, 6, 6);
-    ctx.fillStyle = char.eyes; ctx.fillRect(12, -1, 2, 2); ctx.fillRect(26, -1, 2, 2);
-
-    ctx.restore();
-}
-
-/** * GAME SYSTEMS 
- */
-function showMsg(txt, time = 2500) {
-    const b = document.getElementById('msg-box');
-    b.innerText = txt; b.style.display = 'block';
-    setTimeout(() => b.style.display = 'none', time);
-}
-
-function saveGame() {
-    localStorage.setItem('fnaf_world_gh', JSON.stringify(state));
-    showMsg("Adventure Log Saved!");
-}
-
-function toggleParty() {
-    const menu = document.getElementById('party-menu');
-    if (state.view === 'PARTY') {
-        state.view = 'OVERWORLD';
-        menu.style.display = 'none';
-    } else {
-        state.view = 'PARTY';
-        menu.style.display = 'flex';
-        renderRoster();
-    }
-}
-
-function renderRoster() {
-    const container = document.getElementById('roster-container');
-    container.innerHTML = '';
-    ROSTER.forEach((c, i) => {
-        const isUnlocked = state.unlocked.includes(i);
-        const isActive = state.party.includes(i);
-        const div = document.createElement('div');
-        div.className = `char-slot ${isUnlocked ? '' : 'locked'} ${isActive ? 'active' : ''}`;
-        div.innerHTML = `<div style="font-weight:bold">${c.name}</div>`;
-        div.onclick = () => {
-            if (!isUnlocked) return;
-            if (state.party.includes(i)) {
-                state.party = state.party.filter(id => id !== i);
-            } else if (state.party.length < 4) {
-                state.party.push(i);
-            }
-            renderRoster();
-        };
-        container.appendChild(div);
-    });
-}
-
-/** * BATTLE ENGINE 
- */
-function startBattle(enemy, isChallenger = false) {
-    state.view = 'BATTLE';
-    state.currentEnemy = enemy;
-    state.challenger = isChallenger ? enemy : null;
-    state.battleParty = state.party.map(id => ({ ...ROSTER[id], hp: 100, maxHp: 100 }));
-    
-    document.getElementById('battle-ui').style.display = 'grid';
-    updateBattleUI();
-}
-
-function updateBattleUI() {
-    const stats = document.getElementById('team-stats');
-    stats.innerHTML = '';
-    state.battleParty.forEach(p => {
-        stats.innerHTML += `<div>${p.name} [HP: ${p.hp}/100]</div>`;
-    });
-
-    const actions = document.getElementById('battle-actions');
-    actions.innerHTML = '';
-    ["Mic Toss", "Pizza Wheel", "Happy Jam", "Bash"].forEach(move => {
-        const btn = document.createElement('button');
-        btn.className = 'btn'; btn.innerText = move;
-        btn.onclick = () => performMove(move);
-        actions.appendChild(btn);
-    });
-}
-
-function performMove(move) {
-    if (move === "Happy Jam") {
-        state.battleParty.forEach(p => p.hp = Math.min(100, p.hp + 20));
-        showMsg("Healed Party!");
-    } else {
-        state.currentEnemy.hp -= 30;
-        showMsg(`${move} hits for 30!`);
-    }
-
-    if (state.currentEnemy.hp <= 0) {
-        endBattle(true);
-    } else {
-        setTimeout(enemyAttack, 600);
-    }
-    updateBattleUI();
-}
-
-function enemyAttack() {
-    if (state.view !== 'BATTLE') return;
-    const target = state.battleParty[Math.floor(Math.random()*state.battleParty.length)];
-    target.hp -= 15;
-    if (state.battleParty.every(p => p.hp <= 0)) endBattle(false);
-    updateBattleUI();
-}
-
-function endBattle(win) {
-    document.getElementById('battle-ui').style.display = 'none';
-    state.view = 'OVERWORLD';
-    
-    if (win) {
-        if (state.challenger) {
-            state.unlocked.push(state.challenger.rosterId);
-            showMsg(`${state.challenger.name} Joined Your Roster!`);
-        } else {
-            state.tokens += 40;
-            document.getElementById('token-val').innerText = state.tokens;
-            // 30% Challenger Chance
-            if (Math.random() < 0.3 && state.unlocked.length < 48) {
-                spawnChallenger();
+    // Draw some "Trees" (the green circles from your video)
+    ctx.fillStyle = '#2ecc71';
+    for(let i=0; i<2000; i+=100) {
+        for(let j=0; j<2000; j+=100) {
+            let dx = i - cam.x;
+            let dy = j - cam.y;
+            if(dx > -50 && dx < 850 && dy > -50 && dy < 650) {
+                ctx.beginPath();
+                ctx.arc(dx, dy, 25, 0, Math.PI*2);
+                ctx.fill();
             }
         }
     }
+
+    // Mendo's House
+    ctx.fillStyle = '#444';
+    ctx.fillRect(600 - cam.x, 400 - cam.y, 100, 80);
+    ctx.fillStyle = '#f0f';
+    ctx.fillText("MENDO", 620 - cam.x, 390 - cam.y);
 }
 
-function spawnChallenger() {
-    const locked = ROSTER.map((_, i) => i).filter(id => !state.unlocked.includes(id));
-    const nextId = locked[Math.floor(Math.random()*locked.length)];
-    const data = ROSTER[nextId];
-    showMsg("A NEW CHALLENGER APPEARED!");
-    setTimeout(() => {
-        startBattle({ name: data.name, hp: 200, rosterId: nextId, ...data }, true);
-    }, 1500);
+function drawPlayer() {
+    // Basic Top-Down Character Sprite
+    ctx.fillStyle = '#634'; // Freddy Brown
+    ctx.fillRect(400-15, 300-15, 30, 30);
+    // Hat
+    ctx.fillStyle = '#000';
+    ctx.fillRect(400-8, 300-25, 16, 10);
 }
 
-/** * MAIN LOOP 
- */
-function loop() {
-    ctx.clearRect(0, 0, 800, 600);
+/** GAME LOGIC **/
+function update() {
+    if(gameState !== 'OVERWORLD') return;
 
-    if (state.view === 'OVERWORLD') {
-        // Render World
-        if (state.inGlitch) {
-            ctx.fillStyle = '#010'; ctx.fillRect(0,0,800,600);
-            ctx.strokeStyle = '#040';
-            for(let i=0; i<800; i+=40) ctx.strokeRect(i,0,1,600);
-        } else {
-            ctx.fillStyle = '#131'; ctx.fillRect(0, 480, 800, 120);
-        }
+    if(keys['ArrowUp'] || keys['KeyW']) player.y -= player.speed;
+    if(keys['ArrowDown'] || keys['KeyS']) player.y += player.speed;
+    if(keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
+    if(keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
 
-        // Movement
-        if (state.keys['ArrowLeft']) state.playerPos.x -= 5;
-        if (state.keys['ArrowRight']) state.playerPos.x += 5;
+    // Camera follows player
+    cam.x = player.x - 400;
+    cam.y = player.y - 300;
 
-        // Glitch Trigger (Collision with hidden spots)
-        if (Math.abs(state.playerPos.x - 400) < 20) {
-            ctx.fillStyle = "#fff"; ctx.fillText("?? GLITCH ??", 380, 440);
-            if (state.keys['ArrowUp']) state.inGlitch = !state.inGlitch;
-        }
-
-        drawAnimatronic(state.playerPos.x, state.playerPos.y, ROSTER[state.party[0]]);
-
-        // Random Encounter Logic
-        if (Math.random() < 0.005) {
-            startBattle({ name: "Endo", hp: 100, col: "#777", type: "bear", eyes: "#fff" });
-        }
-
-    } else if (state.view === 'BATTLE') {
-        // Render Battle Stage
-        ctx.fillStyle = '#000'; ctx.fillRect(0,0,800,600);
-        drawAnimatronic(500, 200, state.currentEnemy, 2.5);
-        state.battleParty.forEach((p, i) => drawAnimatronic(150, 80 + (i*100), p, 1.2));
+    // Check Shop Trigger
+    if(Math.abs(player.x - 650) < 50 && Math.abs(player.y - 440) < 50) {
+        openShop();
     }
-
-    requestAnimationFrame(loop);
+    
+    // Random Encounter Chance
+    if(Math.random() < 0.002) startBattle();
 }
 
-// Input Handlers
-window.addEventListener('keydown', e => state.keys[e.code] = true);
-window.addEventListener('keyup', e => state.keys[e.code] = false);
+function openShop() {
+    document.getElementById('shop-ui').style.display = 'block';
+    gameState = 'SHOP';
+}
 
-// Init
-loop();
+function closeShop() {
+    document.getElementById('shop-ui').style.display = 'none';
+    gameState = 'OVERWORLD';
+}
+
+function buyByte(cost) {
+    if(tokens >= cost) {
+        tokens -= cost;
+        bytesOwned++;
+        document.getElementById('token-count').innerText = tokens;
+        alert("Byte Purchased!");
+    }
+}
+
+function startBattle() {
+    gameState = 'BATTLE';
+    const bUI = document.getElementById('battle-ui');
+    bUI.style.display = 'block';
+    
+    // Setup typical moves from your image
+    const moves = ["Mic Toss", "Pizza Wheel", "Birthday"];
+    const cmd = document.getElementById('battle-commands');
+    cmd.innerHTML = '';
+    moves.forEach(m => {
+        const b = document.createElement('button');
+        b.className = 'btn';
+        b.style.marginBottom = '10px';
+        b.innerText = m;
+        b.onclick = () => alert("Used " + m + "!");
+        cmd.appendChild(b);
+    });
+
+    // Add Switch Button
+    const sw = document.createElement('button');
+    sw.className = 'btn';
+    sw.style.marginTop = '20px';
+    sw.innerText = "SWITCH";
+    cmd.appendChild(sw);
+
+    // Setup Team HP Labels
+    const hpDiv = document.getElementById('team-hp');
+    hpDiv.innerHTML = `
+        <div class="hp-val">110</div><br>
+        <div class="hp-val">115</div><br>
+        <div class="hp-val">79</div><br>
+        <div class="hp-val">125</div>
+    `;
+}
+
+function gameLoop() {
+    update();
+    if(gameState === 'OVERWORLD') {
+        drawMap();
+        drawPlayer();
+    }
+    requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+gameLoop();
 </script>
 </body>
 </html>
