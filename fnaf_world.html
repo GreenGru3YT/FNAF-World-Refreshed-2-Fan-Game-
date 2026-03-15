@@ -22,18 +22,22 @@
         #battle-commands { position: absolute; top: 20px; left: 250px; display: flex; flex-direction: column; gap: 10px; }
         #enemy-name { position: absolute; top: 20px; left: 20px; font-size: 24px; color: #fff; }
         #team-hp { position: absolute; top: 20px; right: 20px; text-align: right; }
-        .hp-val { background: #f00; border: 1px solid #fff; padding: 2px 10px; margin-bottom: 5px; font-weight: bold; width: 80px; display: inline-block; }
+        .hp-val { background: #f00; border: 1px solid #fff; padding: 2px 10px; margin-bottom: 5px; font-weight: bold; width: 80px; display: inline-block; text-align: right;}
+        
+        /* Transition Flash */
+        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #fff; opacity: 0; pointer-events: none; z-index: 999; transition: opacity 0.1s; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
+    <div id="flash"></div>
     <div id="hud">
         <button class="btn">PARTY</button>
         <button class="btn">CHIPS</button>
         <button class="btn" onclick="openShop()">BYTES</button>
         <button class="btn" onclick="saveGame()">SAVE</button>
-        <div style="color:var(--fnaf-blue)">Tokens: <span id="token-count">0</span></div>
+        <div style="color:var(--fnaf-blue)">Tokens: <span id="token-count">100</span></div>
     </div>
 
     <div id="shop-ui">
@@ -47,6 +51,7 @@
         <div id="enemy-name">Auto-Chipper</div>
         <div id="battle-commands"></div>
         <div id="team-hp"></div>
+        <button class="btn" onclick="endBattle()" style="position: absolute; bottom: 80px; left: 20px;">Run Away (Debug)</button>
     </div>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -64,15 +69,13 @@ let keys = {};
 // Camera and World
 const world = { width: 2000, height: 2000 };
 const cam = { x: 0, y: 0 };
-const player = { x: 400, y: 300, speed: 4, char: 'Freddy' };
+const player = { x: 400, y: 300, speed: 4 };
 
 /** RENDERING **/
 function drawMap() {
-    // Grass background
     ctx.fillStyle = '#1a472a';
     ctx.fillRect(0, 0, 800, 600);
 
-    // Draw some "Trees" (the green circles from your video)
     ctx.fillStyle = '#2ecc71';
     for(let i=0; i<2000; i+=100) {
         for(let j=0; j<2000; j+=100) {
@@ -90,14 +93,13 @@ function drawMap() {
     ctx.fillStyle = '#444';
     ctx.fillRect(600 - cam.x, 400 - cam.y, 100, 80);
     ctx.fillStyle = '#f0f';
+    ctx.font = "bold 16px Arial";
     ctx.fillText("MENDO", 620 - cam.x, 390 - cam.y);
 }
 
 function drawPlayer() {
-    // Basic Top-Down Character Sprite
-    ctx.fillStyle = '#634'; // Freddy Brown
+    ctx.fillStyle = '#634'; 
     ctx.fillRect(400-15, 300-15, 30, 30);
-    // Hat
     ctx.fillStyle = '#000';
     ctx.fillRect(400-8, 300-25, 16, 10);
 }
@@ -111,7 +113,6 @@ function update() {
     if(keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
     if(keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
 
-    // Camera follows player
     cam.x = player.x - 400;
     cam.y = player.y - 300;
 
@@ -120,8 +121,10 @@ function update() {
         openShop();
     }
     
-    // Random Encounter Chance
-    if(Math.random() < 0.002) startBattle();
+    // Random Encounter Chance (0.2% per frame while moving)
+    if((keys['ArrowUp'] || keys['ArrowDown'] || keys['ArrowLeft'] || keys['ArrowRight']) && Math.random() < 0.002) {
+        triggerEncounter();
+    }
 }
 
 function openShop() {
@@ -132,6 +135,8 @@ function openShop() {
 function closeShop() {
     document.getElementById('shop-ui').style.display = 'none';
     gameState = 'OVERWORLD';
+    // THE FIX: Bounce the player down so they aren't stuck in the trigger!
+    player.y += 60; 
 }
 
 function buyByte(cost) {
@@ -139,8 +144,27 @@ function buyByte(cost) {
         tokens -= cost;
         bytesOwned++;
         document.getElementById('token-count').innerText = tokens;
-        alert("Byte Purchased!");
+        alert("Byte Purchased! It will help you in battles.");
+    } else {
+        alert("Not enough tokens!");
     }
+}
+
+function triggerEncounter() {
+    gameState = 'TRANSITION';
+    const flash = document.getElementById('flash');
+    
+    // Flashing effect to mimic FNaF World encounter transition
+    let flashes = 0;
+    let flashInterval = setInterval(() => {
+        flash.style.opacity = flash.style.opacity == '1' ? '0' : '1';
+        flashes++;
+        if(flashes > 5) {
+            clearInterval(flashInterval);
+            flash.style.opacity = '0';
+            startBattle();
+        }
+    }, 100);
 }
 
 function startBattle() {
@@ -148,7 +172,6 @@ function startBattle() {
     const bUI = document.getElementById('battle-ui');
     bUI.style.display = 'block';
     
-    // Setup typical moves from your image
     const moves = ["Mic Toss", "Pizza Wheel", "Birthday"];
     const cmd = document.getElementById('battle-commands');
     cmd.innerHTML = '';
@@ -161,14 +184,12 @@ function startBattle() {
         cmd.appendChild(b);
     });
 
-    // Add Switch Button
     const sw = document.createElement('button');
     sw.className = 'btn';
     sw.style.marginTop = '20px';
     sw.innerText = "SWITCH";
     cmd.appendChild(sw);
 
-    // Setup Team HP Labels
     const hpDiv = document.getElementById('team-hp');
     hpDiv.innerHTML = `
         <div class="hp-val">110</div><br>
@@ -178,12 +199,26 @@ function startBattle() {
     `;
 }
 
+function endBattle() {
+    document.getElementById('battle-ui').style.display = 'none';
+    gameState = 'OVERWORLD';
+}
+
 function gameLoop() {
     update();
-    if(gameState === 'OVERWORLD') {
+    
+    if(gameState === 'OVERWORLD' || gameState === 'TRANSITION') {
         drawMap();
         drawPlayer();
+    } else if (gameState === 'BATTLE') {
+        // Simple Battle Background
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 800, 600);
+        ctx.fillStyle = '#fff';
+        ctx.font = "20px Arial";
+        ctx.fillText("Battle rendering goes here...", 250, 300);
     }
+    
     requestAnimationFrame(gameLoop);
 }
 
