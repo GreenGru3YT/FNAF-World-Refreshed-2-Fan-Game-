@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>FNaF World - Adventure Mode</title>
     <style>
-        :root { --fnaf-blue: #00aaff; --fnaf-green: #2ecc71; }
+        :root { --fnaf-blue: #00aaff; --fnaf-green: #2ecc71; --dark-bg: #050505; }
         body { margin: 0; background: #000; color: #fff; font-family: 'Arial', sans-serif; overflow: hidden; }
         #game-container { position: relative; width: 800px; height: 600px; margin: 10px auto; border: 4px solid #444; background: #000; }
         canvas { display: block; }
@@ -17,6 +17,14 @@
         /* Mendo's Byte Shop */
         #shop-ui { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); width: 400px; background: #111; border: 3px solid #f0f; padding: 20px; display: none; z-index: 100; text-align: center; }
         
+        /* Party Menu Overlay */
+        #party-menu { position: absolute; top: 0; left: 0; width: 100%; height: 540px; background: rgba(0,0,15,0.95); display: none; flex-direction: column; padding: 30px; box-sizing: border-box; z-index: 200; }
+        .roster-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; overflow-y: auto; margin: 10px 0; max-height: 400px; }
+        .char-slot { border: 1px solid #444; padding: 10px 5px; text-align: center; cursor: pointer; font-size: 11px; transition: 0.2s; font-weight: bold; background: #111; }
+        .char-slot.locked { opacity: 0.3; cursor: default; }
+        .char-slot.active { border-color: #0f0; background: rgba(0,255,0,0.15); box-shadow: 0 0 5px #0f0; }
+        .char-slot:hover:not(.locked) { background: #222; border-color: var(--fnaf-blue); }
+
         /* Battle UI Overlay */
         #battle-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: none; z-index: 50; }
         #battle-commands { position: absolute; top: 20px; left: 250px; display: flex; flex-direction: column; gap: 10px; }
@@ -32,8 +40,9 @@
 
 <div id="game-container">
     <div id="flash"></div>
+    
     <div id="hud">
-        <button class="btn">PARTY</button>
+        <button class="btn" onclick="toggleParty()">PARTY</button>
         <button class="btn">CHIPS</button>
         <button class="btn" onclick="openShop()">BYTES</button>
         <button class="btn" onclick="saveGame()">SAVE</button>
@@ -47,6 +56,13 @@
         <button class="btn" onclick="closeShop()">Exit Shop</button>
     </div>
 
+    <div id="party-menu">
+        <h2 style="margin:0; color: var(--fnaf-blue);">Manage Your Party</h2>
+        <p>Select up to 4 characters. The first character is your party leader!</p>
+        <div id="roster-container" class="roster-grid"></div>
+        <button class="btn" style="width: 200px; margin: 10px auto;" onclick="toggleParty()">Done</button>
+    </div>
+
     <div id="battle-ui">
         <div id="enemy-name">Auto-Chipper</div>
         <div id="battle-commands"></div>
@@ -58,6 +74,31 @@
 </div>
 
 <script>
+/** CHARACTER DATA **/
+const ROSTER = [
+    { name: "Freddy", col: "#634", type: "bear", eyes: "#0cf", feat: "hat" },
+    { name: "Bonnie", col: "#54a", type: "bunny", eyes: "#f00", feat: "ears" },
+    { name: "Chica", col: "#eb2", type: "bird", eyes: "#f0f", feat: "bib" },
+    { name: "Foxy", col: "#a33", type: "fox", eyes: "#ff0", feat: "patch" },
+    { name: "Toy Freddy", col: "#853", type: "bear", eyes: "#0cf", feat: "hat" },
+    { name: "Toy Bonnie", col: "#0cf", type: "bunny", eyes: "#0f0", feat: "ears" },
+    { name: "Toy Chica", col: "#ff0", type: "bird", eyes: "#0cf", feat: "bib" },
+    { name: "Mangle", col: "#eee", type: "fox", eyes: "#ff0", feat: "patch" },
+    { name: "BB", col: "#f44", type: "human", eyes: "#0cf", feat: "prop" },
+    { name: "JJ", col: "#f4a", type: "human", eyes: "#f0f", feat: "prop" },
+    { name: "Phantom Freddy", col: "#452", type: "bear", eyes: "#fff", feat: "hat", ghost: true },
+    { name: "Springtrap", col: "#774", type: "bunny", eyes: "#999", feat: "ears" },
+    { name: "Puppet", col: "#111", type: "human", eyes: "#fff", feat: "face" },
+    { name: "Nightmare", col: "#111", type: "bear", eyes: "#f00", feat: "hat" },
+    { name: "Crying Child", col: "#222", type: "human", eyes: "#fff", feat: "tears" },
+    { name: "Fredbear", col: "#fb2", type: "bear", eyes: "#0cf", feat: "hat" }
+];
+
+// Fill the rest of the 48 slots
+for(let i=ROSTER.length; i<48; i++) {
+    ROSTER.push({ name: "Slot "+(i+1), col: "#222", type: "bear", eyes: "#555", feat: "none" });
+}
+
 /** ENGINE CONFIG **/
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -66,10 +107,40 @@ let bytesOwned = 0;
 let gameState = 'OVERWORLD';
 let keys = {};
 
+// Party State
+let unlockedChars = [0, 1, 2, 3, 4, 5, 11]; // Gave you a few extra unlocked to test
+let activeParty = [0, 1, 2, 3]; 
+
 // Camera and World
 const world = { width: 2000, height: 2000 };
 const cam = { x: 0, y: 0 };
 const player = { x: 400, y: 300, speed: 4 };
+
+/** PROCEDURAL DRAWING **/
+function drawAnimatronic(x, y, char, scale = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    
+    if (char.ghost) ctx.globalAlpha = 0.5;
+
+    // Body & Head
+    ctx.fillStyle = char.col;
+    ctx.fillRect(-20, -15, 40, 35); 
+    ctx.fillRect(-15, -40, 30, 25);
+    
+    // Feature Logic
+    ctx.fillStyle = "#000";
+    if (char.feat === "hat") { ctx.fillRect(-10, -50, 20, 12); ctx.fillRect(-15, -42, 30, 4); }
+    if (char.feat === "ears") { ctx.fillStyle = char.col; ctx.fillRect(-15, -60, 8, 20); ctx.fillRect(7, -60, 8, 20); }
+    if (char.feat === "patch") { ctx.fillStyle = "#111"; ctx.fillRect(-10, -32, 8, 8); }
+
+    // Eyes
+    ctx.fillStyle = "#fff"; ctx.fillRect(-10, -33, 6, 6); ctx.fillRect(4, -33, 6, 6);
+    ctx.fillStyle = char.eyes; ctx.fillRect(-8, -31, 2, 2); ctx.fillRect(6, -31, 2, 2);
+
+    ctx.restore();
+}
 
 /** RENDERING **/
 function drawMap() {
@@ -98,10 +169,47 @@ function drawMap() {
 }
 
 function drawPlayer() {
-    ctx.fillStyle = '#634'; 
-    ctx.fillRect(400-15, 300-15, 30, 30);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(400-8, 300-25, 16, 10);
+    // Draw the active party leader in the overworld!
+    let leader = ROSTER[activeParty[0]];
+    drawAnimatronic(400, 300, leader, 0.8);
+}
+
+/** UI & MENUS **/
+function toggleParty() {
+    const menu = document.getElementById('party-menu');
+    if (gameState === 'PARTY') {
+        gameState = 'OVERWORLD';
+        menu.style.display = 'none';
+    } else if (gameState === 'OVERWORLD') {
+        gameState = 'PARTY';
+        menu.style.display = 'flex';
+        renderRoster();
+    }
+}
+
+function renderRoster() {
+    const container = document.getElementById('roster-container');
+    container.innerHTML = '';
+    ROSTER.forEach((c, i) => {
+        const isUnlocked = unlockedChars.includes(i);
+        const isActive = activeParty.includes(i);
+        const div = document.createElement('div');
+        div.className = `char-slot ${isUnlocked ? '' : 'locked'} ${isActive ? 'active' : ''}`;
+        div.innerHTML = c.name;
+        
+        div.onclick = () => {
+            if (!isUnlocked) return;
+            if (activeParty.includes(i)) {
+                if(activeParty.length > 1) { // Prevent removing the last character
+                    activeParty = activeParty.filter(id => id !== i);
+                }
+            } else if (activeParty.length < 4) {
+                activeParty.push(i);
+            }
+            renderRoster(); // Refresh the grid
+        };
+        container.appendChild(div);
+    });
 }
 
 /** GAME LOGIC **/
@@ -135,8 +243,7 @@ function openShop() {
 function closeShop() {
     document.getElementById('shop-ui').style.display = 'none';
     gameState = 'OVERWORLD';
-    // THE FIX: Bounce the player down so they aren't stuck in the trigger!
-    player.y += 60; 
+    player.y += 60; // Bounce out of trigger
 }
 
 function buyByte(cost) {
@@ -153,8 +260,6 @@ function buyByte(cost) {
 function triggerEncounter() {
     gameState = 'TRANSITION';
     const flash = document.getElementById('flash');
-    
-    // Flashing effect to mimic FNaF World encounter transition
     let flashes = 0;
     let flashInterval = setInterval(() => {
         flash.style.opacity = flash.style.opacity == '1' ? '0' : '1';
@@ -190,13 +295,12 @@ function startBattle() {
     sw.innerText = "SWITCH";
     cmd.appendChild(sw);
 
+    // Dynamic HP bars based on active party
     const hpDiv = document.getElementById('team-hp');
-    hpDiv.innerHTML = `
-        <div class="hp-val">110</div><br>
-        <div class="hp-val">115</div><br>
-        <div class="hp-val">79</div><br>
-        <div class="hp-val">125</div>
-    `;
+    hpDiv.innerHTML = '';
+    activeParty.forEach(id => {
+        hpDiv.innerHTML += `<div class="hp-val">100</div><br>`;
+    });
 }
 
 function endBattle() {
@@ -207,16 +311,20 @@ function endBattle() {
 function gameLoop() {
     update();
     
-    if(gameState === 'OVERWORLD' || gameState === 'TRANSITION') {
+    if(gameState === 'OVERWORLD' || gameState === 'TRANSITION' || gameState === 'PARTY') {
         drawMap();
         drawPlayer();
     } else if (gameState === 'BATTLE') {
-        // Simple Battle Background
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, 800, 600);
         ctx.fillStyle = '#fff';
         ctx.font = "20px Arial";
-        ctx.fillText("Battle rendering goes here...", 250, 300);
+        ctx.fillText("Battle View - Party Data loaded!", 250, 300);
+        
+        // Draw the active party in battle
+        activeParty.forEach((id, index) => {
+            drawAnimatronic(150, 200 + (index * 80), ROSTER[id], 1.5);
+        });
     }
     
     requestAnimationFrame(gameLoop);
