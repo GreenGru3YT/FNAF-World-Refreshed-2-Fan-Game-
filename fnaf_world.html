@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fazbear Overworld RPG</title>
+    <style>
+        body { margin: 0; background: #111; color: white; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+        #game-container { position: relative; width: 800px; height: 600px; margin: 20px auto; border: 4px solid #444; overflow: hidden; }
+        canvas { display: block; background: #222; }
+        
+        /* Battle UI */
+        #battle-ui {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 200px;
+            background: rgba(0, 0, 50, 0.9); border-top: 4px solid #fff;
+            display: none; grid-template-columns: 1fr 2fr; padding: 10px; box-sizing: border-box;
+        }
+        .party-list { display: flex; flex-direction: column; gap: 5px; }
+        .character-status { padding: 5px; border: 1px solid #555; font-size: 12px; }
+        .hp-bar-bg { width: 100%; height: 10px; background: #400; margin-top: 4px; }
+        .hp-bar-fill { height: 100%; background: #f00; transition: width 0.3s; }
+        
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { 
+            background: #008; color: white; border: 2px solid #fff; cursor: pointer; 
+            font-size: 16px; transition: 0.2s; 
+        }
+        button:hover { background: #00f; }
+        button:disabled { background: #333; color: #777; border-color: #555; }
+
+        #message-box {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); padding: 10px 20px; border: 2px solid #fff;
+            display: none; z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="message-box"></div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div id="battle-ui">
+        <div class="party-list" id="party-stats"></div>
+        <div class="controls" id="action-buttons">
+            </div>
+    </div>
+</div>
+
+<script>
+/** * GAME CONFIGURATION & STATE 
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const ui = document.getElementById('battle-ui');
+const partyStatsDiv = document.getElementById('party-stats');
+const actionButtonsDiv = document.getElementById('action-buttons');
+const msgBox = document.getElementById('message-box');
+
+let gameState = 'OVERWORLD'; // OVERWORLD or BATTLE
+let keys = {};
+let frame = 0;
+
+// World Settings
+const world = {
+    width: 3000,
+    height: 600,
+    gravity: 0.8,
+    groundY: 500,
+    cameraX: 0
+};
+
+/**
+ * CLASSES
+ */
+class Entity {
+    constructor(x, y, color, name) {
+        this.x = x;
+        this.y = y;
+        this.w = 40;
+        this.h = 60;
+        this.color = color;
+        this.name = name;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.atk = 10;
+        this.level = 1;
+        this.xp = 0;
+    }
+}
+
+class Player extends Entity {
+    constructor(x, y) {
+        super(x, y, '#0af', 'Freddy');
+        this.vx = 0;
+        this.abilities = [
+            { name: 'Mic Toss', damage: 15, cd: 0 },
+            { name: 'Pizza Wheel', damage: 25, cd: 2 },
+            { name: 'Heal Song', damage: -20, cd: 3 }
+        ];
+    }
+
+    update() {
+        if (keys['ArrowLeft']) this.vx = -5;
+        else if (keys['ArrowRight']) this.vx = 5;
+        else this.vx = 0;
+
+        this.x += this.vx;
+        // Keep in bounds
+        if (this.x < 0) this.x = 0;
+        if (this.x > world.width - this.w) this.x = world.width - this.w;
+
+        // Camera follow
+        world.cameraX = this.x - canvas.width / 2 + this.w / 2;
+        if (world.cameraX < 0) world.cameraX = 0;
+        if (world.cameraX > world.width - canvas.width) world.cameraX = world.width - canvas.width;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        // Simple bounce animation
+        let bounce = Math.sin(frame * 0.2) * 5;
+        ctx.fillRect(this.x - world.cameraX, this.y + bounce, this.w, this.h);
+        ctx.fillStyle = 'white';
+        ctx.fillText(this.name, this.x - world.cameraX, this.y - 10);
+    }
+}
+
+class Enemy extends Entity {
+    constructor(x, y, type) {
+        super(x, y, '#f44', type);
+        this.roamDir = 1;
+        this.startPos = x;
+    }
+
+    update() {
+        this.x += this.roamDir * 2;
+        if (Math.abs(this.x - this.startPos) > 100) this.roamDir *= -1;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x - world.cameraX, this.y, this.w, this.h);
+    }
+}
+
+/**
+ * GAME INSTANCES
+ */
+const player = new Player(100, 440);
+const enemies = [
+    new Enemy(600, 440, 'Endo-01'),
+    new Enemy(1200, 440, 'Ballboy'),
+    new Enemy(1800, 440, 'Crabapple')
+];
+const party = [player, new Entity(0,0,'#f0f', 'Bonnie'), new Entity(0,0,'#ff0', 'Chica')];
+party.forEach(m => { m.maxHp = 100; m.hp = 100; m.abilities = player.abilities; });
+
+let currentEnemy = null;
+let turn = 'PLAYER';
+
+/**
+ * ENGINE LOGIC
+ */
+function showMessage(txt) {
+    msgBox.innerText = txt;
+    msgBox.style.display = 'block';
+    setTimeout(() => msgBox.style.display = 'none', 2000);
+}
+
+function startBattle(enemy) {
+    gameState = 'BATTLE';
+    currentEnemy = enemy;
+    ui.style.display = 'grid';
+    updateBattleUI();
+    showMessage("A wild " + enemy.name + " appeared!");
+}
+
+function updateBattleUI() {
+    partyStatsDiv.innerHTML = '';
+    party.forEach(p => {
+        const hpPercent = (p.hp / p.maxHp) * 100;
+        partyStatsDiv.innerHTML += `
+            <div class="character-status">
+                ${p.name} (Lvl ${p.level})
+                <div class="hp-bar-bg"><div class="hp-bar-fill" style="width:${hpPercent}%"></div></div>
+            </div>
+        `;
+    });
+
+    actionButtonsDiv.innerHTML = '';
+    player.abilities.forEach(abi => {
+        const btn = document.createElement('button');
+        btn.innerText = abi.name;
+        btn.onclick = () => handlePlayerAction(abi);
+        actionButtonsDiv.appendChild(btn);
+    });
+}
+
+function handlePlayerAction(ability) {
+    if (turn !== 'PLAYER') return;
+
+    // Player attacks enemy
+    if (ability.damage > 0) {
+        currentEnemy.hp -= ability.damage;
+        showMessage(`${player.name} uses ${ability.name}! Done ${ability.damage} dmg.`);
+    } else {
+        party.forEach(p => p.hp = Math.min(p.maxHp, p.hp + Math.abs(ability.damage)));
+        showMessage(`Party healed!`);
+    }
+
+    if (currentEnemy.hp <= 0) {
+        endBattle(true);
+    } else {
+        turn = 'ENEMY';
+        setTimeout(enemyTurn, 1000);
+    }
+    updateBattleUI();
+}
+
+function enemyTurn() {
+    const target = party[Math.floor(Math.random() * party.length)];
+    const dmg = 10 + Math.floor(Math.random() * 10);
+    target.hp -= dmg;
+    showMessage(`${currentEnemy.name} attacks ${target.name} for ${dmg}!`);
+    
+    if (target.hp <= 0) target.hp = 0;
+    
+    turn = 'PLAYER';
+    updateBattleUI();
+}
+
+function endBattle(victory) {
+    if (victory) {
+        showMessage("Victory! Gained 50 XP");
+        player.xp += 50;
+        if (player.xp >= 100) {
+            player.level++;
+            player.xp = 0;
+            showMessage("Level Up!");
+        }
+        // Remove enemy from world
+        enemies.splice(enemies.indexOf(currentEnemy), 1);
+    }
+    gameState = 'OVERWORLD';
+    ui.style.display = 'none';
+}
+
+/**
+ * MAIN LOOP
+ */
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (gameState === 'OVERWORLD') {
+        // Draw Ground
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, world.groundY, canvas.width, 100);
+        
+        // Update & Draw Player
+        player.update();
+        player.draw();
+
+        // Update & Draw Enemies
+        enemies.forEach(en => {
+            en.update();
+            en.draw();
+            
+            // Collision Detection
+            let dx = player.x - en.x;
+            if (Math.abs(dx) < 30) {
+                startBattle(en);
+            }
+        });
+
+        // Simple Environment (Trees/Poles)
+        ctx.fillStyle = '#333';
+        for(let i=0; i<3000; i+=300) {
+            ctx.fillRect(i - world.cameraX, world.groundY - 100, 10, 100);
+        }
+
+    } else if (gameState === 'BATTLE') {
+        // Draw Battle Scene
+        ctx.fillStyle = '#002';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw Enemy Large
+        ctx.fillStyle = currentEnemy.color;
+        ctx.fillRect(500, 150, 150, 200);
+        ctx.fillStyle = 'white';
+        ctx.fillText(currentEnemy.name, 500, 140);
+        ctx.fillText(`HP: ${currentEnemy.hp}`, 500, 370);
+
+        // Draw Party
+        party.forEach((p, i) => {
+            ctx.fillStyle = p.color;
+            ctx.fillRect(150, 100 + (i * 100), 40, 60);
+        });
+    }
+
+    frame++;
+    requestAnimationFrame(loop);
+}
+
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// Start
+loop();
+
+</script>
+</body>
+</html>
