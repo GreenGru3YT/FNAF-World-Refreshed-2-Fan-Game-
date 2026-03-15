@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>FNAF World Refreshed</title>
+<title>FNAF World Refreshed Fangame</title>
 
 <style>
+
 body{
 margin:0;
-background:#000;
+background:black;
 color:white;
 font-family:Arial;
 overflow:hidden;
@@ -30,8 +31,8 @@ width:100%;
 height:60px;
 background:#001a33;
 display:flex;
-align-items:center;
 justify-content:space-around;
+align-items:center;
 }
 
 .btn{
@@ -48,14 +49,14 @@ top:0;
 left:0;
 width:100%;
 height:100%;
-display:none;
 background:black;
+display:none;
 }
 
 #commands{
 position:absolute;
 left:20px;
-top:80px;
+top:120px;
 display:flex;
 flex-direction:column;
 gap:8px;
@@ -65,21 +66,32 @@ gap:8px;
 position:absolute;
 right:20px;
 top:20px;
-text-align:right;
 }
 
 .hp{
 background:red;
-padding:3px 8px;
+padding:4px;
 margin-bottom:6px;
 }
 
 .damage{
 position:absolute;
-color:#ff0;
+color:yellow;
 font-weight:bold;
 pointer-events:none;
 }
+
+#shop{
+position:absolute;
+top:120px;
+left:200px;
+width:400px;
+background:#111;
+border:3px solid magenta;
+padding:20px;
+display:none;
+}
+
 </style>
 </head>
 
@@ -94,61 +106,88 @@ pointer-events:none;
 <div id="hpUI"></div>
 </div>
 
+<div id="shop">
+<h3>Mendo's Byte Shop</h3>
+<button class="btn" onclick="buyByte()">Buy Byte (50)</button>
+<br><br>
+<button class="btn" onclick="closeShop()">Exit</button>
+</div>
+
 <div id="hud">
+
 <div>Tokens: <span id="tokens">0</span></div>
+<div>XP: <span id="xp">0</span></div>
+<div>Level: <span id="lvl">1</span></div>
+
 <button class="btn" onclick="switchParty()">SWITCH</button>
+<button class="btn" onclick="saveGame()">SAVE</button>
+<button class="btn" onclick="loadGame()">LOAD</button>
+
 </div>
 
 </div>
 
 <script>
 
-const canvas = document.getElementById("canvas")
-const ctx = canvas.getContext("2d")
+const canvas=document.getElementById("canvas")
+const ctx=canvas.getContext("2d")
 
 let keys={}
-
-let tokens=0
-let xp=0
-let level=1
 
 const world={w:2000,h:2000}
 
 const cam={x:0,y:0}
 
-const player={
-x:500,
-y:500,
-speed:4
+const player={x:600,y:600,speed:4}
+
+let tokens=0
+let xp=0
+let level=1
+
+let chips={
+attackBoost:false,
+defenseBoost:false
 }
 
+let bytesOwned=0
+
 const roster=[
-{name:"Freddy",col:"#6b3"},
-{name:"Bonnie",col:"#44a"},
-{name:"Chica",col:"#ee2"},
-{name:"Foxy",col:"#a33"},
-{name:"Toy Freddy",col:"#852"},
-{name:"Toy Bonnie",col:"#0cf"},
-{name:"Mangle",col:"#eee"}
+{name:"Freddy",col:"#7a4",abilities:["Mic Toss","Pizza Wheel","Heal"]},
+{name:"Bonnie",col:"#44a",abilities:["Bash Jam","Guitar Blast","Heal"]},
+{name:"Chica",col:"#ee2",abilities:["Cupcake","Pizza","Heal"]},
+{name:"Foxy",col:"#a33",abilities:["Hook Slash","Dash","Bite"]},
+{name:"Toy Freddy",col:"#854",abilities:["Mic Toss","Pizza Wheel","Party"]},
+{name:"Toy Bonnie",col:"#0cf",abilities:["Jam","Blast","Heal"]},
+{name:"Mangle",col:"#fff",abilities:["Bite","Static","Hook"]}
 ]
 
+let unlocked=[0,1,2,3]
+
 let party1=[0,1,2,3]
-let party2=[4,5,6]
+let party2=[4,5]
 
 let activeParty=party1
 
 let partyHP=[]
 let enemyHP=0
+let enemyRef=null
 
-let bytesOwned=1
+let gameState="world"
 
 let enemies=[
 {x:800,y:900,hp:60},
 {x:1200,y:700,hp:60},
-{x:1500,y:1100,hp:80}
+{x:1500,y:1000,hp:80}
 ]
 
-let gameState="world"
+let bosses=[
+{x:1800,y:1800,name:"Auto Chipper",hp:300},
+{x:200,y:1800,name:"Security Owl",hp:350}
+]
+
+let portals=[
+{x:100,y:100}
+]
 
 function drawChar(x,y,char){
 
@@ -156,9 +195,9 @@ ctx.fillStyle=char.col
 ctx.fillRect(x-15,y-25,30,30)
 ctx.fillRect(x-10,y-40,20,15)
 
-ctx.fillStyle="#000"
-ctx.fillRect(x-6,y-33,4,4)
-ctx.fillRect(x+2,y-33,4,4)
+ctx.fillStyle="black"
+ctx.fillRect(x-5,y-32,4,4)
+ctx.fillRect(x+1,y-32,4,4)
 
 }
 
@@ -197,9 +236,20 @@ let dy=e.y-cam.y
 ctx.fillStyle="#888"
 ctx.fillRect(dx-20,dy-20,40,40)
 
-if(Math.abs(player.x-e.x)<35 && Math.abs(player.y-e.y)<35){
+let dist=Math.hypot(player.x-e.x,player.y-e.y)
 
-startBattle(e)
+if(dist<200){
+
+let angle=Math.atan2(player.y-e.y,player.x-e.x)
+
+e.x+=Math.cos(angle)*1
+e.y+=Math.sin(angle)*1
+
+}
+
+if(dist<35 && gameState==="world"){
+
+startBattle(e,false)
 
 }
 
@@ -207,9 +257,46 @@ startBattle(e)
 
 }
 
-function drawPlayer(){
+function drawBosses(){
 
-drawChar(400,300,roster[activeParty[0]])
+bosses.forEach(b=>{
+
+let dx=b.x-cam.x
+let dy=b.y-cam.y
+
+ctx.fillStyle="purple"
+ctx.fillRect(dx-30,dy-30,60,60)
+
+if(Math.abs(player.x-b.x)<40 && Math.abs(player.y-b.y)<40){
+
+startBattle(b,true)
+
+}
+
+})
+
+}
+
+function drawPortals(){
+
+portals.forEach(p=>{
+
+let dx=p.x-cam.x
+let dy=p.y-cam.y
+
+ctx.fillStyle="cyan"
+ctx.beginPath()
+ctx.arc(dx,dy,20,0,Math.PI*2)
+ctx.fill()
+
+if(Math.abs(player.x-p.x)<30 && Math.abs(player.y-p.y)<30){
+
+player.x=1600
+player.y=300
+
+}
+
+})
 
 }
 
@@ -228,72 +315,101 @@ player.y=Math.max(0,Math.min(world.h,player.y))
 cam.x=player.x-400
 cam.y=player.y-300
 
+cam.x=Math.max(0,Math.min(world.w-800,cam.x))
+cam.y=Math.max(0,Math.min(world.h-600,cam.y))
+
+if(Math.abs(player.x-600)<60 && Math.abs(player.y-600)<60){
+
+document.getElementById("shop").style.display="block"
+
 }
 
-function startBattle(enemy){
+}
 
-gameState="battle"
+function startBattle(enemy,boss){
+
+if(gameState!=="world")return
 
 enemyHP=enemy.hp
+enemyRef=enemy
 
 partyHP=activeParty.map(()=>100)
 
+gameState="battle"
+
 document.getElementById("battleUI").style.display="block"
 
-renderBattle(enemy)
-
-}
-
-function renderBattle(enemy){
-
-const cmd=document.getElementById("commands")
-cmd.innerHTML=""
-
-const moves=["Mic Toss","Pizza Wheel","Bite"]
-
-moves.forEach(m=>{
-
-const b=document.createElement("button")
-b.className="btn"
-b.innerText=m
-
-b.onclick=()=>attack(enemy)
-
-cmd.appendChild(b)
-
-})
+renderCommands()
 
 updateHP()
 
 }
 
-function attack(enemy){
+function renderCommands(){
 
-let dmg=10+Math.random()*10
+const cmd=document.getElementById("commands")
 
-enemyHP-=dmg
+cmd.innerHTML=""
 
-spawnDamage(500,200,Math.floor(dmg))
+let abilities=roster[activeParty[0]].abilities
 
-if(bytesOwned){
+abilities.forEach(a=>{
 
-let byteDmg=5
+let b=document.createElement("button")
+b.className="btn"
+b.innerText=a
 
-enemyHP-=byteDmg
+b.onclick=()=>useAbility(a)
 
-spawnDamage(500,220,byteDmg)
+cmd.appendChild(b)
+
+})
 
 }
 
-if(enemyHP<=0){
+function useAbility(a){
 
-victory(enemy)
+let dmg=0
+
+if(a==="Heal"){
+
+partyHP[0]+=20
+
+updateHP()
 
 return
 
 }
 
-enemyAttack()
+if(a==="Pizza Wheel")dmg=15
+if(a==="Mic Toss")dmg=12
+if(a==="Bite")dmg=18
+if(a==="Hook Slash")dmg=16
+if(a==="Guitar Blast")dmg=14
+
+if(chips.attackBoost)dmg+=5
+
+enemyHP-=dmg
+
+spawnDamage(520,200,dmg)
+
+if(bytesOwned){
+
+enemyHP-=5
+
+spawnDamage(520,220,5)
+
+}
+
+if(enemyHP<=0){
+
+victory()
+
+return
+
+}
+
+setTimeout(enemyAttack,700)
 
 }
 
@@ -301,22 +417,44 @@ function enemyAttack(){
 
 let target=Math.floor(Math.random()*partyHP.length)
 
-let dmg=8+Math.random()*8
+let dmg=10
+
+if(chips.defenseBoost)dmg-=3
 
 partyHP[target]-=dmg
 
-spawnDamage(150,200+(target*70),Math.floor(dmg))
+spawnDamage(150,200+(target*70),dmg)
 
 updateHP()
 
+if(partyHP.every(h=>h<=0)){
+
+alert("Party defeated")
+
+endBattle()
+
 }
 
-function victory(enemy){
+}
 
-tokens+=10
-xp+=20
+function victory(){
 
-document.getElementById("tokens").innerText=tokens
+tokens+=20
+xp+=30
+
+if(Math.random()<0.3){
+
+let id=Math.floor(Math.random()*roster.length)
+
+if(!unlocked.includes(id)){
+
+unlocked.push(id)
+
+alert("Character unlocked!")
+
+}
+
+}
 
 if(xp>=level*100){
 
@@ -325,7 +463,19 @@ level++
 
 }
 
-enemies=enemies.filter(e=>e!==enemy)
+document.getElementById("tokens").innerText=tokens
+document.getElementById("xp").innerText=xp
+document.getElementById("lvl").innerText=level
+
+if(enemyRef.name){
+
+bosses=bosses.filter(b=>b!==enemyRef)
+
+}else{
+
+enemies=enemies.filter(e=>e!==enemyRef)
+
+}
 
 endBattle()
 
@@ -333,16 +483,17 @@ endBattle()
 
 function updateHP(){
 
-const hpUI=document.getElementById("hpUI")
-hpUI.innerHTML=""
+const hp=document.getElementById("hpUI")
+
+hp.innerHTML=""
 
 partyHP.forEach(h=>{
 
-let div=document.createElement("div")
-div.className="hp"
-div.innerText=Math.max(0,Math.floor(h))
+let d=document.createElement("div")
+d.className="hp"
+d.innerText=Math.max(0,h)
 
-hpUI.appendChild(div)
+hp.appendChild(d)
 
 })
 
@@ -351,12 +502,15 @@ hpUI.appendChild(div)
 function spawnDamage(x,y,val){
 
 let d=document.createElement("div")
+
 d.className="damage"
+
 d.innerText=val
+
 d.style.left=x+"px"
 d.style.top=y+"px"
 
-document.body.appendChild(d)
+document.getElementById("game").appendChild(d)
 
 setTimeout(()=>d.remove(),800)
 
@@ -372,7 +526,52 @@ gameState="world"
 
 function switchParty(){
 
-activeParty = activeParty===party1 ? party2 : party1
+activeParty=activeParty===party1?party2:party1
+
+}
+
+function buyByte(){
+
+if(tokens>=50){
+
+tokens-=50
+
+bytesOwned++
+
+document.getElementById("tokens").innerText=tokens
+
+}
+
+}
+
+function closeShop(){
+
+document.getElementById("shop").style.display="none"
+
+}
+
+function saveGame(){
+
+let data={tokens,xp,level,unlocked}
+
+localStorage.setItem("fnafSave",JSON.stringify(data))
+
+}
+
+function loadGame(){
+
+let data=JSON.parse(localStorage.getItem("fnafSave"))
+
+if(!data)return
+
+tokens=data.tokens
+xp=data.xp
+level=data.level
+unlocked=data.unlocked
+
+document.getElementById("tokens").innerText=tokens
+document.getElementById("xp").innerText=xp
+document.getElementById("lvl").innerText=level
 
 }
 
@@ -383,16 +582,16 @@ update()
 if(gameState==="world"){
 
 drawWorld()
-
 drawEnemies()
-
-drawPlayer()
+drawBosses()
+drawPortals()
+drawChar(400,300,roster[activeParty[0]])
 
 }
 
 else if(gameState==="battle"){
 
-ctx.fillStyle="#000"
+ctx.fillStyle="black"
 ctx.fillRect(0,0,800,600)
 
 activeParty.forEach((id,i)=>{
@@ -401,8 +600,8 @@ drawChar(150,200+(i*80),roster[id])
 
 })
 
-ctx.fillStyle="#aaa"
-ctx.fillRect(600,250,80,80)
+ctx.fillStyle="gray"
+ctx.fillRect(600,240,90,90)
 
 }
 
