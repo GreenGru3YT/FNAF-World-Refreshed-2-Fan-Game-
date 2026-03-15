@@ -1,339 +1,420 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>FNaF World - Adventure Mode</title>
-    <style>
-        :root { --fnaf-blue: #00aaff; --fnaf-green: #2ecc71; --dark-bg: #050505; }
-        body { margin: 0; background: #000; color: #fff; font-family: 'Arial', sans-serif; overflow: hidden; }
-        #game-container { position: relative; width: 800px; height: 600px; margin: 10px auto; border: 4px solid #444; background: #000; }
-        canvas { display: block; }
+<meta charset="UTF-8">
+<title>FNAF World Refreshed</title>
 
-        /* UI HUD */
-        #hud { position: absolute; bottom: 0; width: 100%; height: 60px; background: rgba(0,0,50,0.9); border-top: 3px solid var(--fnaf-blue); display: flex; justify-content: space-around; align-items: center; z-index: 10; }
-        .btn { background: #003366; color: #fff; border: 2px solid var(--fnaf-blue); padding: 5px 15px; cursor: pointer; font-weight: bold; font-size: 14px; }
-        .btn:hover { background: var(--fnaf-blue); color: #000; }
+<style>
+body{
+margin:0;
+background:#000;
+color:white;
+font-family:Arial;
+overflow:hidden;
+}
 
-        /* Mendo's Byte Shop */
-        #shop-ui { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); width: 400px; background: #111; border: 3px solid #f0f; padding: 20px; display: none; z-index: 100; text-align: center; }
-        
-        /* Party Menu Overlay */
-        #party-menu { position: absolute; top: 0; left: 0; width: 100%; height: 540px; background: rgba(0,0,15,0.95); display: none; flex-direction: column; padding: 30px; box-sizing: border-box; z-index: 200; }
-        .roster-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; overflow-y: auto; margin: 10px 0; max-height: 400px; }
-        .char-slot { border: 1px solid #444; padding: 10px 5px; text-align: center; cursor: pointer; font-size: 11px; transition: 0.2s; font-weight: bold; background: #111; }
-        .char-slot.locked { opacity: 0.3; cursor: default; }
-        .char-slot.active { border-color: #0f0; background: rgba(0,255,0,0.15); box-shadow: 0 0 5px #0f0; }
-        .char-slot:hover:not(.locked) { background: #222; border-color: var(--fnaf-blue); }
+#game{
+width:800px;
+height:600px;
+margin:auto;
+position:relative;
+border:4px solid #444;
+}
 
-        /* Battle UI Overlay */
-        #battle-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: none; z-index: 50; }
-        #battle-commands { position: absolute; top: 20px; left: 250px; display: flex; flex-direction: column; gap: 10px; }
-        #enemy-name { position: absolute; top: 20px; left: 20px; font-size: 24px; color: #fff; }
-        #team-hp { position: absolute; top: 20px; right: 20px; text-align: right; }
-        .hp-val { background: #f00; border: 1px solid #fff; padding: 2px 10px; margin-bottom: 5px; font-weight: bold; width: 80px; display: inline-block; text-align: right;}
-        
-        /* Transition Flash */
-        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #fff; opacity: 0; pointer-events: none; z-index: 999; transition: opacity 0.1s; }
-    </style>
+canvas{display:block}
+
+#hud{
+position:absolute;
+bottom:0;
+width:100%;
+height:60px;
+background:#001a33;
+display:flex;
+align-items:center;
+justify-content:space-around;
+}
+
+.btn{
+background:#003366;
+border:2px solid #00aaff;
+color:white;
+padding:6px 14px;
+cursor:pointer;
+}
+
+#battleUI{
+position:absolute;
+top:0;
+left:0;
+width:100%;
+height:100%;
+display:none;
+background:black;
+}
+
+#commands{
+position:absolute;
+left:20px;
+top:80px;
+display:flex;
+flex-direction:column;
+gap:8px;
+}
+
+#hpUI{
+position:absolute;
+right:20px;
+top:20px;
+text-align:right;
+}
+
+.hp{
+background:red;
+padding:3px 8px;
+margin-bottom:6px;
+}
+
+.damage{
+position:absolute;
+color:#ff0;
+font-weight:bold;
+pointer-events:none;
+}
+</style>
 </head>
+
 <body>
 
-<div id="game-container">
-    <div id="flash"></div>
-    
-    <div id="hud">
-        <button class="btn" onclick="toggleParty()">PARTY</button>
-        <button class="btn">CHIPS</button>
-        <button class="btn" onclick="openShop()">BYTES</button>
-        <button class="btn" onclick="saveGame()">SAVE</button>
-        <div style="color:var(--fnaf-blue)">Tokens: <span id="token-count">100</span></div>
-    </div>
+<div id="game">
 
-    <div id="shop-ui">
-        <h2 style="color:#f0f">Mendo's Endoskeleton Shop</h2>
-        <p>Buy a Byte to help in battle!</p>
-        <button class="btn" onclick="buyByte(50)">Med-Pod (50 Tokens)</button><br><br>
-        <button class="btn" onclick="closeShop()">Exit Shop</button>
-    </div>
+<canvas id="canvas" width="800" height="600"></canvas>
 
-    <div id="party-menu">
-        <h2 style="margin:0; color: var(--fnaf-blue);">Manage Your Party</h2>
-        <p>Select up to 4 characters. The first character is your party leader!</p>
-        <div id="roster-container" class="roster-grid"></div>
-        <button class="btn" style="width: 200px; margin: 10px auto;" onclick="toggleParty()">Done</button>
-    </div>
+<div id="battleUI">
+<div id="commands"></div>
+<div id="hpUI"></div>
+</div>
 
-    <div id="battle-ui">
-        <div id="enemy-name">Auto-Chipper</div>
-        <div id="battle-commands"></div>
-        <div id="team-hp"></div>
-        <button class="btn" onclick="endBattle()" style="position: absolute; bottom: 80px; left: 20px;">Run Away (Debug)</button>
-    </div>
+<div id="hud">
+<div>Tokens: <span id="tokens">0</span></div>
+<button class="btn" onclick="switchParty()">SWITCH</button>
+</div>
 
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
 </div>
 
 <script>
-/** CHARACTER DATA **/
-const ROSTER = [
-    { name: "Freddy", col: "#634", type: "bear", eyes: "#0cf", feat: "hat" },
-    { name: "Bonnie", col: "#54a", type: "bunny", eyes: "#f00", feat: "ears" },
-    { name: "Chica", col: "#eb2", type: "bird", eyes: "#f0f", feat: "bib" },
-    { name: "Foxy", col: "#a33", type: "fox", eyes: "#ff0", feat: "patch" },
-    { name: "Toy Freddy", col: "#853", type: "bear", eyes: "#0cf", feat: "hat" },
-    { name: "Toy Bonnie", col: "#0cf", type: "bunny", eyes: "#0f0", feat: "ears" },
-    { name: "Toy Chica", col: "#ff0", type: "bird", eyes: "#0cf", feat: "bib" },
-    { name: "Mangle", col: "#eee", type: "fox", eyes: "#ff0", feat: "patch" },
-    { name: "BB", col: "#f44", type: "human", eyes: "#0cf", feat: "prop" },
-    { name: "JJ", col: "#f4a", type: "human", eyes: "#f0f", feat: "prop" },
-    { name: "Phantom Freddy", col: "#452", type: "bear", eyes: "#fff", feat: "hat", ghost: true },
-    { name: "Springtrap", col: "#774", type: "bunny", eyes: "#999", feat: "ears" },
-    { name: "Puppet", col: "#111", type: "human", eyes: "#fff", feat: "face" },
-    { name: "Nightmare", col: "#111", type: "bear", eyes: "#f00", feat: "hat" },
-    { name: "Crying Child", col: "#222", type: "human", eyes: "#fff", feat: "tears" },
-    { name: "Fredbear", col: "#fb2", type: "bear", eyes: "#0cf", feat: "hat" }
-];
 
-// Fill the rest of the 48 slots
-for(let i=ROSTER.length; i<48; i++) {
-    ROSTER.push({ name: "Slot "+(i+1), col: "#222", type: "bear", eyes: "#555", feat: "none" });
+const canvas = document.getElementById("canvas")
+const ctx = canvas.getContext("2d")
+
+let keys={}
+
+let tokens=0
+let xp=0
+let level=1
+
+const world={w:2000,h:2000}
+
+const cam={x:0,y:0}
+
+const player={
+x:500,
+y:500,
+speed:4
 }
 
-/** ENGINE CONFIG **/
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-let tokens = 100;
-let bytesOwned = 0;
-let gameState = 'OVERWORLD';
-let keys = {};
+const roster=[
+{name:"Freddy",col:"#6b3"},
+{name:"Bonnie",col:"#44a"},
+{name:"Chica",col:"#ee2"},
+{name:"Foxy",col:"#a33"},
+{name:"Toy Freddy",col:"#852"},
+{name:"Toy Bonnie",col:"#0cf"},
+{name:"Mangle",col:"#eee"}
+]
 
-// Party State
-let unlockedChars = [0, 1, 2, 3, 4, 5, 11]; // Gave you a few extra unlocked to test
-let activeParty = [0, 1, 2, 3]; 
+let party1=[0,1,2,3]
+let party2=[4,5,6]
 
-// Camera and World
-const world = { width: 2000, height: 2000 };
-const cam = { x: 0, y: 0 };
-const player = { x: 400, y: 300, speed: 4 };
+let activeParty=party1
 
-/** PROCEDURAL DRAWING **/
-function drawAnimatronic(x, y, char, scale = 1) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(scale, scale);
-    
-    if (char.ghost) ctx.globalAlpha = 0.5;
+let partyHP=[]
+let enemyHP=0
 
-    // Body & Head
-    ctx.fillStyle = char.col;
-    ctx.fillRect(-20, -15, 40, 35); 
-    ctx.fillRect(-15, -40, 30, 25);
-    
-    // Feature Logic
-    ctx.fillStyle = "#000";
-    if (char.feat === "hat") { ctx.fillRect(-10, -50, 20, 12); ctx.fillRect(-15, -42, 30, 4); }
-    if (char.feat === "ears") { ctx.fillStyle = char.col; ctx.fillRect(-15, -60, 8, 20); ctx.fillRect(7, -60, 8, 20); }
-    if (char.feat === "patch") { ctx.fillStyle = "#111"; ctx.fillRect(-10, -32, 8, 8); }
+let bytesOwned=1
 
-    // Eyes
-    ctx.fillStyle = "#fff"; ctx.fillRect(-10, -33, 6, 6); ctx.fillRect(4, -33, 6, 6);
-    ctx.fillStyle = char.eyes; ctx.fillRect(-8, -31, 2, 2); ctx.fillRect(6, -31, 2, 2);
+let enemies=[
+{x:800,y:900,hp:60},
+{x:1200,y:700,hp:60},
+{x:1500,y:1100,hp:80}
+]
 
-    ctx.restore();
+let gameState="world"
+
+function drawChar(x,y,char){
+
+ctx.fillStyle=char.col
+ctx.fillRect(x-15,y-25,30,30)
+ctx.fillRect(x-10,y-40,20,15)
+
+ctx.fillStyle="#000"
+ctx.fillRect(x-6,y-33,4,4)
+ctx.fillRect(x+2,y-33,4,4)
+
 }
 
-/** RENDERING **/
-function drawMap() {
-    ctx.fillStyle = '#1a472a';
-    ctx.fillRect(0, 0, 800, 600);
+function drawWorld(){
 
-    ctx.fillStyle = '#2ecc71';
-    for(let i=0; i<2000; i+=100) {
-        for(let j=0; j<2000; j+=100) {
-            let dx = i - cam.x;
-            let dy = j - cam.y;
-            if(dx > -50 && dx < 850 && dy > -50 && dy < 650) {
-                ctx.beginPath();
-                ctx.arc(dx, dy, 25, 0, Math.PI*2);
-                ctx.fill();
-            }
-        }
-    }
+ctx.fillStyle="#2ecc71"
+ctx.fillRect(0,0,800,600)
 
-    // Mendo's House
-    ctx.fillStyle = '#444';
-    ctx.fillRect(600 - cam.x, 400 - cam.y, 100, 80);
-    ctx.fillStyle = '#f0f';
-    ctx.font = "bold 16px Arial";
-    ctx.fillText("MENDO", 620 - cam.x, 390 - cam.y);
+for(let i=0;i<world.w;i+=100){
+
+for(let j=0;j<world.h;j+=100){
+
+let dx=i-cam.x
+let dy=j-cam.y
+
+if(dx>-100 && dx<900 && dy>-100 && dy<700){
+
+ctx.fillStyle="#27ae60"
+ctx.fillRect(dx-25,dy-25,50,50)
+
 }
 
-function drawPlayer() {
-    // Draw the active party leader in the overworld!
-    let leader = ROSTER[activeParty[0]];
-    drawAnimatronic(400, 300, leader, 0.8);
 }
 
-/** UI & MENUS **/
-function toggleParty() {
-    const menu = document.getElementById('party-menu');
-    if (gameState === 'PARTY') {
-        gameState = 'OVERWORLD';
-        menu.style.display = 'none';
-    } else if (gameState === 'OVERWORLD') {
-        gameState = 'PARTY';
-        menu.style.display = 'flex';
-        renderRoster();
-    }
 }
 
-function renderRoster() {
-    const container = document.getElementById('roster-container');
-    container.innerHTML = '';
-    ROSTER.forEach((c, i) => {
-        const isUnlocked = unlockedChars.includes(i);
-        const isActive = activeParty.includes(i);
-        const div = document.createElement('div');
-        div.className = `char-slot ${isUnlocked ? '' : 'locked'} ${isActive ? 'active' : ''}`;
-        div.innerHTML = c.name;
-        
-        div.onclick = () => {
-            if (!isUnlocked) return;
-            if (activeParty.includes(i)) {
-                if(activeParty.length > 1) { // Prevent removing the last character
-                    activeParty = activeParty.filter(id => id !== i);
-                }
-            } else if (activeParty.length < 4) {
-                activeParty.push(i);
-            }
-            renderRoster(); // Refresh the grid
-        };
-        container.appendChild(div);
-    });
 }
 
-/** GAME LOGIC **/
-function update() {
-    if(gameState !== 'OVERWORLD') return;
+function drawEnemies(){
 
-    if(keys['ArrowUp'] || keys['KeyW']) player.y -= player.speed;
-    if(keys['ArrowDown'] || keys['KeyS']) player.y += player.speed;
-    if(keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
-    if(keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
+enemies.forEach(e=>{
 
-    cam.x = player.x - 400;
-    cam.y = player.y - 300;
+let dx=e.x-cam.x
+let dy=e.y-cam.y
 
-    // Check Shop Trigger
-    if(Math.abs(player.x - 650) < 50 && Math.abs(player.y - 440) < 50) {
-        openShop();
-    }
-    
-    // Random Encounter Chance (0.2% per frame while moving)
-    if((keys['ArrowUp'] || keys['ArrowDown'] || keys['ArrowLeft'] || keys['ArrowRight']) && Math.random() < 0.002) {
-        triggerEncounter();
-    }
+ctx.fillStyle="#888"
+ctx.fillRect(dx-20,dy-20,40,40)
+
+if(Math.abs(player.x-e.x)<35 && Math.abs(player.y-e.y)<35){
+
+startBattle(e)
+
 }
 
-function openShop() {
-    document.getElementById('shop-ui').style.display = 'block';
-    gameState = 'SHOP';
+})
+
 }
 
-function closeShop() {
-    document.getElementById('shop-ui').style.display = 'none';
-    gameState = 'OVERWORLD';
-    player.y += 60; // Bounce out of trigger
+function drawPlayer(){
+
+drawChar(400,300,roster[activeParty[0]])
+
 }
 
-function buyByte(cost) {
-    if(tokens >= cost) {
-        tokens -= cost;
-        bytesOwned++;
-        document.getElementById('token-count').innerText = tokens;
-        alert("Byte Purchased! It will help you in battles.");
-    } else {
-        alert("Not enough tokens!");
-    }
+function update(){
+
+if(gameState!=="world")return
+
+if(keys["KeyW"])player.y-=player.speed
+if(keys["KeyS"])player.y+=player.speed
+if(keys["KeyA"])player.x-=player.speed
+if(keys["KeyD"])player.x+=player.speed
+
+player.x=Math.max(0,Math.min(world.w,player.x))
+player.y=Math.max(0,Math.min(world.h,player.y))
+
+cam.x=player.x-400
+cam.y=player.y-300
+
 }
 
-function triggerEncounter() {
-    gameState = 'TRANSITION';
-    const flash = document.getElementById('flash');
-    let flashes = 0;
-    let flashInterval = setInterval(() => {
-        flash.style.opacity = flash.style.opacity == '1' ? '0' : '1';
-        flashes++;
-        if(flashes > 5) {
-            clearInterval(flashInterval);
-            flash.style.opacity = '0';
-            startBattle();
-        }
-    }, 100);
+function startBattle(enemy){
+
+gameState="battle"
+
+enemyHP=enemy.hp
+
+partyHP=activeParty.map(()=>100)
+
+document.getElementById("battleUI").style.display="block"
+
+renderBattle(enemy)
+
 }
 
-function startBattle() {
-    gameState = 'BATTLE';
-    const bUI = document.getElementById('battle-ui');
-    bUI.style.display = 'block';
-    
-    const moves = ["Mic Toss", "Pizza Wheel", "Birthday"];
-    const cmd = document.getElementById('battle-commands');
-    cmd.innerHTML = '';
-    moves.forEach(m => {
-        const b = document.createElement('button');
-        b.className = 'btn';
-        b.style.marginBottom = '10px';
-        b.innerText = m;
-        b.onclick = () => alert("Used " + m + "!");
-        cmd.appendChild(b);
-    });
+function renderBattle(enemy){
 
-    const sw = document.createElement('button');
-    sw.className = 'btn';
-    sw.style.marginTop = '20px';
-    sw.innerText = "SWITCH";
-    cmd.appendChild(sw);
+const cmd=document.getElementById("commands")
+cmd.innerHTML=""
 
-    // Dynamic HP bars based on active party
-    const hpDiv = document.getElementById('team-hp');
-    hpDiv.innerHTML = '';
-    activeParty.forEach(id => {
-        hpDiv.innerHTML += `<div class="hp-val">100</div><br>`;
-    });
+const moves=["Mic Toss","Pizza Wheel","Bite"]
+
+moves.forEach(m=>{
+
+const b=document.createElement("button")
+b.className="btn"
+b.innerText=m
+
+b.onclick=()=>attack(enemy)
+
+cmd.appendChild(b)
+
+})
+
+updateHP()
+
 }
 
-function endBattle() {
-    document.getElementById('battle-ui').style.display = 'none';
-    gameState = 'OVERWORLD';
+function attack(enemy){
+
+let dmg=10+Math.random()*10
+
+enemyHP-=dmg
+
+spawnDamage(500,200,Math.floor(dmg))
+
+if(bytesOwned){
+
+let byteDmg=5
+
+enemyHP-=byteDmg
+
+spawnDamage(500,220,byteDmg)
+
 }
 
-function gameLoop() {
-    update();
-    
-    if(gameState === 'OVERWORLD' || gameState === 'TRANSITION' || gameState === 'PARTY') {
-        drawMap();
-        drawPlayer();
-    } else if (gameState === 'BATTLE') {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, 800, 600);
-        ctx.fillStyle = '#fff';
-        ctx.font = "20px Arial";
-        ctx.fillText("Battle View - Party Data loaded!", 250, 300);
-        
-        // Draw the active party in battle
-        activeParty.forEach((id, index) => {
-            drawAnimatronic(150, 200 + (index * 80), ROSTER[id], 1.5);
-        });
-    }
-    
-    requestAnimationFrame(gameLoop);
+if(enemyHP<=0){
+
+victory(enemy)
+
+return
+
 }
 
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
+enemyAttack()
 
-gameLoop();
+}
+
+function enemyAttack(){
+
+let target=Math.floor(Math.random()*partyHP.length)
+
+let dmg=8+Math.random()*8
+
+partyHP[target]-=dmg
+
+spawnDamage(150,200+(target*70),Math.floor(dmg))
+
+updateHP()
+
+}
+
+function victory(enemy){
+
+tokens+=10
+xp+=20
+
+document.getElementById("tokens").innerText=tokens
+
+if(xp>=level*100){
+
+xp=0
+level++
+
+}
+
+enemies=enemies.filter(e=>e!==enemy)
+
+endBattle()
+
+}
+
+function updateHP(){
+
+const hpUI=document.getElementById("hpUI")
+hpUI.innerHTML=""
+
+partyHP.forEach(h=>{
+
+let div=document.createElement("div")
+div.className="hp"
+div.innerText=Math.max(0,Math.floor(h))
+
+hpUI.appendChild(div)
+
+})
+
+}
+
+function spawnDamage(x,y,val){
+
+let d=document.createElement("div")
+d.className="damage"
+d.innerText=val
+d.style.left=x+"px"
+d.style.top=y+"px"
+
+document.body.appendChild(d)
+
+setTimeout(()=>d.remove(),800)
+
+}
+
+function endBattle(){
+
+document.getElementById("battleUI").style.display="none"
+
+gameState="world"
+
+}
+
+function switchParty(){
+
+activeParty = activeParty===party1 ? party2 : party1
+
+}
+
+function loop(){
+
+update()
+
+if(gameState==="world"){
+
+drawWorld()
+
+drawEnemies()
+
+drawPlayer()
+
+}
+
+else if(gameState==="battle"){
+
+ctx.fillStyle="#000"
+ctx.fillRect(0,0,800,600)
+
+activeParty.forEach((id,i)=>{
+
+drawChar(150,200+(i*80),roster[id])
+
+})
+
+ctx.fillStyle="#aaa"
+ctx.fillRect(600,250,80,80)
+
+}
+
+requestAnimationFrame(loop)
+
+}
+
+window.addEventListener("keydown",e=>keys[e.code]=true)
+window.addEventListener("keyup",e=>keys[e.code]=false)
+
+loop()
+
 </script>
 </body>
 </html>
