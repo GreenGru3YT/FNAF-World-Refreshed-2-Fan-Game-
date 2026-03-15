@@ -2,346 +2,299 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fazbear RPG: Advanced Edition</title>
+    <title>FNaF World: Canvas Edition</title>
     <style>
-        body { margin: 0; background: #050505; color: white; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
-        #game-container { position: relative; width: 800px; height: 600px; margin: 10px auto; border: 4px solid #333; box-shadow: 0 0 20px #00f; }
-        canvas { display: block; background: radial-gradient(circle, #222 0%, #000 100%); }
+        body { margin: 0; background: #000; color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        #game-container { position: relative; width: 800px; height: 600px; margin: 20px auto; border: 4px solid #222; box-shadow: 0 0 30px #04f; background: #000; }
+        canvas { display: block; }
         
-        /* Top Bar */
-        #top-ui {
-            position: absolute; top: 0; left: 0; width: 100%; height: 40px;
-            background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; box-sizing: border-box; z-index: 5;
-        }
-        .btn-small { background: #444; color: #fff; border: 1px solid #777; padding: 2px 10px; cursor: pointer; font-size: 12px; }
-        .btn-small:hover { background: #666; }
-
-        /* Battle UI */
-        #battle-ui {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 220px;
-            background: linear-gradient(to bottom, #000033, #000011); border-top: 3px solid #0af;
-            display: none; grid-template-columns: 1fr 2fr; padding: 15px; box-sizing: border-box;
-        }
-        .party-list { display: flex; flex-direction: column; gap: 8px; }
-        .character-status { padding: 8px; background: rgba(255,255,255,0.05); border-left: 4px solid #0af; font-size: 13px; }
-        .hp-bar-bg { width: 100%; height: 8px; background: #300; border-radius: 4px; margin-top: 5px; overflow: hidden; }
-        .hp-bar-fill { height: 100%; background: #0f0; transition: width 0.3s; }
+        /* UI Overlays */
+        #top-ui { position: absolute; top: 0; left: 0; width: 100%; height: 50px; background: rgba(0,0,20,0.8); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; border-bottom: 2px solid #08f; z-index: 10; }
+        #battle-ui { position: absolute; bottom: 0; left: 0; width: 100%; height: 240px; background: linear-gradient(to bottom, #001, #003); border-top: 4px solid #0cf; display: none; grid-template-columns: 250px 1fr; padding: 15px; box-sizing: border-box; }
+        #shop-ui { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); width: 400px; background: #111; border: 3px solid #f0f; padding: 20px; display: none; z-index: 20; text-align: center; }
         
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .ability-btn { 
-            background: #111; color: #0af; border: 2px solid #0af; cursor: pointer; 
-            font-size: 14px; font-weight: bold; position: relative; overflow: hidden;
-        }
-        .ability-btn:disabled { border-color: #333; color: #444; cursor: not-allowed; }
-        .cooldown-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0, 170, 255, 0.3); height: 0%; transition: height 0.1s linear; }
-
-        #message-box {
-            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.9); color: #0f0; padding: 10px 30px; border: 1px solid #0f0;
-            display: none; z-index: 10; font-family: monospace;
-        }
+        /* Buttons & Bars */
+        .btn { background: #005; color: #0cf; border: 2px solid #0cf; padding: 8px 15px; cursor: pointer; font-weight: bold; margin: 5px; }
+        .btn:hover:not(:disabled) { background: #0cf; color: #000; }
+        .btn:disabled { border-color: #333; color: #555; cursor: not-allowed; }
+        .hp-bar { width: 100%; height: 10px; background: #300; margin-top: 5px; border-radius: 5px; overflow: hidden; }
+        .hp-fill { height: 100%; background: #0f0; transition: width 0.3s; }
+        #msg { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); border: 1px solid #0f0; color: #0f0; padding: 10px 20px; display: none; z-index: 100; pointer-events: none; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <div id="top-ui">
-        <div id="currency-display">Tokens: 0</div>
+        <div id="token-count">Tokens: 0</div>
         <div>
-            <button class="btn-small" onclick="saveGame()">SAVE GAME</button>
-            <button class="btn-small" onclick="loadGame()">LOAD GAME</button>
+            <button class="btn" style="padding:2px 10px; font-size:12px;" onclick="saveGame()">SAVE</button>
+            <button class="btn" style="padding:2px 10px; font-size:12px;" onclick="loadGame()">LOAD</button>
+            <button class="btn" style="padding:2px 10px; font-size:12px;" onclick="toggleShop()">BYTE SHOP</button>
         </div>
     </div>
 
-    <div id="message-box"></div>
+    <div id="msg"></div>
+    <div id="shop-ui">
+        <h2 style="color:#f0f; margin-top:0;">Mendo's Byte Shop</h2>
+        <p>Upgrade your helper drone!</p>
+        <button class="btn" id="buy-byte" onclick="buyByte()">Upgrade Byte (50 Tokens)</button>
+        <br><br>
+        <button class="btn" onclick="toggleShop()">Close</button>
+    </div>
+
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     
     <div id="battle-ui">
-        <div class="party-list" id="party-stats"></div>
-        <div class="controls" id="action-buttons"></div>
+        <div id="party-list"></div>
+        <div id="ability-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;"></div>
     </div>
 </div>
 
 <script>
-/** * GAME STATE & CONSTANTS
+/** * GAME CORE 
  */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const ui = document.getElementById('battle-ui');
-const partyStatsDiv = document.getElementById('party-stats');
-const actionButtonsDiv = document.getElementById('action-buttons');
-const msgBox = document.getElementById('message-box');
+const msgEl = document.getElementById('msg');
+let frame = 0, gameState = 'OVERWORLD', tokens = 0, keys = {};
 
-let gameState = 'OVERWORLD';
-let keys = {};
-let frame = 0;
-let tokens = 0;
-
-const world = { width: 4000, height: 600, groundY: 520, cameraX: 0 };
+const world = { width: 3000, groundY: 520, camX: 0 };
 
 /**
- * ENTITY CLASSES
+ * CHARACTER MODELS (Procedural Drawing)
+ */
+function drawModel(x, y, type, scale=1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    
+    // Body Colors
+    const colors = { 
+        'Freddy': '#634', 'Bonnie': '#54a', 'Chica': '#eb2', 
+        'Foxy': '#a33', 'Endo': '#777', 'Mendo': '#f0f' 
+    };
+    const c = colors[type] || '#777';
+
+    // Feet
+    ctx.fillStyle = c;
+    ctx.fillRect(5, 50, 12, 10);
+    ctx.fillRect(23, 50, 12, 10);
+
+    // Main Body
+    ctx.fillRect(0, 15, 40, 35);
+    
+    // Head
+    ctx.fillRect(5, -10, 30, 25);
+    
+    // Character Specifics
+    ctx.fillStyle = '#000';
+    if(type === 'Freddy') { // Top Hat
+        ctx.fillRect(10, -20, 20, 12);
+        ctx.fillRect(5, -12, 30, 4);
+    } else if (type === 'Bonnie') { // Ears
+        ctx.fillStyle = c;
+        ctx.fillRect(5, -30, 8, 20);
+        ctx.fillRect(27, -30, 8, 20);
+    } else if (type === 'Chica') { // Beak/Bib
+        ctx.fillStyle = '#f90'; ctx.fillRect(12, 5, 16, 8);
+        ctx.fillStyle = '#fff'; ctx.fillRect(5, 15, 30, 15);
+    } else if (type === 'Foxy') { // Hook & Patch
+        ctx.fillStyle = '#333'; ctx.fillRect(10, 0, 8, 8); // Patch
+        ctx.fillStyle = '#999'; ctx.fillRect(35, 30, 15, 5); // Hook
+    }
+
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(10, -3, 6, 6);
+    ctx.fillRect(24, -3, 6, 6);
+    ctx.fillStyle = '#0cf';
+    ctx.fillRect(12, -1, 2, 2);
+    ctx.fillRect(26, -1, 2, 2);
+
+    ctx.restore();
+}
+
+/**
+ * CLASSES
  */
 class Character {
-    constructor(name, color, atk, maxHp) {
-        this.name = name;
-        this.color = color;
-        this.atk = atk;
-        this.hp = maxHp;
-        this.maxHp = maxHp;
-        this.level = 1;
-        this.xp = 0;
+    constructor(name, hp, atk) {
+        this.name = name; this.hp = hp; this.maxHp = hp; this.atk = atk;
+        this.lvl = 1; this.xp = 0;
         this.abilities = [
-            { name: 'Bash', dmg: 15, cd: 2000, lastUsed: 0 },
-            { name: 'Pizza Party', dmg: 25, cd: 5000, lastUsed: 0 },
-            { name: 'Regen', dmg: -20, cd: 8000, lastUsed: 0 }
+            { name: 'Mic Toss', pwr: 20, cd: 2000, last: 0 },
+            { name: 'Pizza Wheel', pwr: 35, cd: 6000, last: 0 },
+            { name: 'Happy Jam', pwr: -25, cd: 8000, last: 0 }
         ];
     }
 }
 
-class PlayerEntity {
+class Player {
     constructor() {
-        this.x = 100;
-        this.y = 460;
-        this.w = 40;
-        this.h = 60;
-        this.vx = 0;
-        this.party = [
-            new Character('Freddy', '#0af', 15, 120),
-            new Character('Bonnie', '#a0f', 12, 100),
-            new Character('Chica', '#ff0', 10, 110)
-        ];
-        this.byteLevel = 1; // Passive damage helper
+        this.x = 200; this.y = 460; this.byteLvl = 0;
+        this.party = [new Character('Freddy', 150, 20), new Character('Bonnie', 120, 18), new Character('Chica', 130, 15)];
     }
-
     update() {
-        if (keys['ArrowLeft']) this.vx = -6;
-        else if (keys['ArrowRight']) this.vx = 6;
-        else this.vx = 0;
-
-        this.x += this.vx;
-        if (this.x < 0) this.x = 0;
-        if (this.x > world.width - this.w) this.x = world.width - this.w;
-
-        world.cameraX = Math.max(0, Math.min(this.x - 380, world.width - 800));
+        if (keys['ArrowLeft']) this.x -= 6;
+        if (keys['ArrowRight']) this.x += 6;
+        this.x = Math.max(0, Math.min(this.x, world.width - 40));
+        world.camX = Math.max(0, Math.min(this.x - 380, world.width - 800));
     }
-
     draw() {
-        ctx.fillStyle = this.party[0].color;
-        let b = Math.sin(frame * 0.15) * 6;
-        ctx.fillRect(this.x - world.cameraX, this.y + b, this.w, this.h);
-        
-        // Byte (Floating Helper)
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(this.x - world.cameraX - 20, this.y + b - 20, 5, 0, Math.PI*2);
-        ctx.fill();
+        drawModel(this.x - world.camX, this.y, this.party[0].name);
+        // Draw Byte
+        if(this.byteLvl > 0) {
+            ctx.fillStyle = '#0ff';
+            let bx = this.x - world.camX - 30 + Math.cos(frame * 0.1) * 10;
+            let by = this.y - 30 + Math.sin(frame * 0.1) * 10;
+            ctx.beginPath(); ctx.arc(bx, by, 6, 0, Math.PI*2); ctx.fill();
+        }
     }
 }
 
 class Enemy {
-    constructor(x, name, color, hp) {
-        this.x = x;
-        this.y = 460;
-        this.w = 40;
-        this.h = 60;
-        this.name = name;
-        this.color = color;
-        this.hp = hp;
-        this.maxHp = hp;
-        this.id = Math.random();
+    constructor(x, name, hp) {
+        this.x = x; this.y = 460; this.name = name; this.hp = hp; this.maxHp = hp; this.id = Math.random();
     }
-    draw() {
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x - world.cameraX, this.y, this.w, this.h);
-        ctx.fillStyle = 'white';
-        ctx.fillText(this.name, this.x - world.cameraX, this.y - 10);
-    }
+    draw() { drawModel(this.x - world.camX, this.y, 'Endo'); }
 }
 
-let player = new PlayerEntity();
-let enemies = [
-    new Enemy(800, 'Endo', '#f55', 100),
-    new Enemy(1600, 'Gearrat', '#f55', 200),
-    new Enemy(2400, 'Brow Boy', '#f55', 400)
-];
+const player = new Player();
+let enemies = [new Enemy(800, 'Endo-01', 100), new Enemy(1600, 'GearHead', 250), new Enemy(2500, 'Auto-Chipper', 600)];
 let currentEnemy = null;
 
 /**
- * SAVE & LOAD LOGIC
+ * SYSTEMS
  */
+function showMsg(t) { msgEl.innerText = t; msgEl.style.display = 'block'; setTimeout(()=>msgEl.style.display='none', 2000); }
+
 function saveGame() {
-    const saveData = {
-        tokens: tokens,
-        level: player.party[0].level,
-        xp: player.party[0].xp,
-        enemyCount: enemies.length,
-        posX: player.x
-    };
-    localStorage.setItem('fnaf_world_save', JSON.stringify(saveData));
-    showMessage("Game Saved to LocalStorage!");
+    localStorage.setItem('fnaf_save', JSON.stringify({t: tokens, x: player.x, b: player.byteLvl, eCount: enemies.length}));
+    showMsg("Adventure Saved!");
 }
 
 function loadGame() {
-    const raw = localStorage.getItem('fnaf_world_save');
-    if (!raw) return showMessage("No save data found!");
-    
-    const data = JSON.parse(raw);
-    tokens = data.tokens;
-    player.x = data.posX;
-    player.party.forEach(p => {
-        p.level = data.level;
-        p.xp = data.xp;
-    });
-    // Refresh currency display
-    document.getElementById('currency-display').innerText = `Tokens: ${tokens}`;
-    showMessage("Game Loaded!");
+    const data = JSON.parse(localStorage.getItem('fnaf_save'));
+    if(!data) return showMsg("No Save Found");
+    tokens = data.t; player.x = data.x; player.byteLvl = data.b;
+    document.getElementById('token-count').innerText = `Tokens: ${tokens}`;
+    showMsg("Loaded Data!");
 }
 
-/**
- * BATTLE SYSTEM
- */
-function showMessage(txt) {
-    msgBox.innerText = txt;
-    msgBox.style.display = 'block';
-    setTimeout(() => msgBox.style.display = 'none', 2500);
+function toggleShop() {
+    const ui = document.getElementById('shop-ui');
+    ui.style.display = (ui.style.display === 'block') ? 'none' : 'block';
 }
 
-function startBattle(enemy) {
-    gameState = 'BATTLE';
-    currentEnemy = enemy;
-    ui.style.display = 'grid';
+function buyByte() {
+    if(tokens >= 50) {
+        tokens -= 50; player.byteLvl++;
+        document.getElementById('token-count').innerText = `Tokens: ${tokens}`;
+        showMsg("Byte Upgraded!");
+    } else showMsg("Not enough tokens!");
+}
+
+function startBattle(e) {
+    gameState = 'BATTLE'; currentEnemy = e;
+    document.getElementById('battle-ui').style.display = 'grid';
     updateBattleUI();
 }
 
 function updateBattleUI() {
-    partyStatsDiv.innerHTML = '';
+    const pList = document.getElementById('party-list');
+    pList.innerHTML = '';
     player.party.forEach(p => {
-        const hpPct = (p.hp / p.maxHp) * 100;
-        partyStatsDiv.innerHTML += `
-            <div class="character-status">
-                ${p.name} - Lvl ${p.level}
-                <div class="hp-bar-bg"><div class="hp-bar-fill" style="width:${hpPct}%"></div></div>
-            </div>
-        `;
+        pList.innerHTML += `<div>${p.name} <div class="hp-bar"><div class="hp-fill" style="width:${(p.hp/p.maxHp)*100}%"></div></div></div>`;
     });
 
-    actionButtonsDiv.innerHTML = '';
-    player.party[0].abilities.forEach((abi, index) => {
+    const aGrid = document.getElementById('ability-grid');
+    aGrid.innerHTML = '';
+    player.party[0].abilities.forEach((a, i) => {
         const btn = document.createElement('button');
-        btn.className = 'ability-btn';
-        btn.innerHTML = `${abi.name}<div class="cooldown-overlay" id="cd-${index}"></div>`;
-        
+        btn.className = 'btn'; btn.innerText = a.name;
         const now = Date.now();
-        const timePassed = now - abi.lastUsed;
-        if (timePassed < abi.cd) {
+        if(now - a.last < a.cd) {
             btn.disabled = true;
-            setTimeout(updateBattleUI, abi.cd - timePassed);
+            setTimeout(updateBattleUI, a.cd - (now - a.last));
         }
-
-        btn.onclick = () => useAbility(abi, index);
-        actionButtonsDiv.appendChild(btn);
+        btn.onclick = () => useAbility(a);
+        aGrid.appendChild(btn);
     });
 }
 
-function useAbility(abi, index) {
-    abi.lastUsed = Date.now();
-    
-    // Byte Attack (Passive Bonus)
-    const byteDmg = player.byteLevel * 5;
-    
-    if (abi.dmg > 0) {
-        const totalDmg = abi.dmg + byteDmg;
-        currentEnemy.hp -= totalDmg;
-        showMessage(`${abi.name} hits for ${totalDmg}! (Byte +${byteDmg})`);
+function useAbility(a) {
+    a.last = Date.now();
+    let dmg = a.pwr + (player.byteLvl * 10);
+    if(a.pwr > 0) {
+        currentEnemy.hp -= dmg;
+        showMsg(`${a.name} hits for ${dmg}!`);
     } else {
-        player.party.forEach(p => p.hp = Math.min(p.maxHp, p.hp + Math.abs(abi.dmg)));
-        showMessage(`Party healed for ${Math.abs(abi.dmg)}!`);
+        player.party.forEach(p => p.hp = Math.min(p.maxHp, p.hp + Math.abs(a.pwr)));
+        showMsg("Party Healed!");
     }
-
-    if (currentEnemy.hp <= 0) {
-        endBattle(true);
-    } else {
-        setTimeout(enemyAction, 800);
-    }
+    
+    if(currentEnemy.hp <= 0) endBattle(true);
+    else setTimeout(enemyTurn, 800);
     updateBattleUI();
 }
 
-function enemyAction() {
-    if (gameState !== 'BATTLE') return;
-    const target = player.party[Math.floor(Math.random() * player.party.length)];
-    const dmg = 10 + (player.party[0].level * 2);
-    target.hp -= dmg;
-    if (target.hp < 0) target.hp = 0;
+function enemyTurn() {
+    if(gameState !== 'BATTLE') return;
+    const target = player.party[Math.floor(Math.random()*3)];
+    target.hp -= 15;
+    if(player.party.every(p => p.hp <= 0)) endBattle(false);
     updateBattleUI();
-    
-    if (player.party.every(p => p.hp <= 0)) endBattle(false);
 }
 
 function endBattle(win) {
-    if (win) {
-        tokens += 50;
-        player.party.forEach(p => p.xp += 40);
-        enemies = enemies.filter(e => e.id !== currentEnemy.id);
-        showMessage("Victory! +50 Tokens");
-    } else {
-        showMessage("Game Over! Party Fainted.");
-        player.x = 100; // Reset position
-        player.party.forEach(p => p.hp = p.maxHp);
-    }
-    
-    document.getElementById('currency-display').innerText = `Tokens: ${tokens}`;
     gameState = 'OVERWORLD';
-    ui.style.display = 'none';
+    document.getElementById('battle-ui').style.display = 'none';
+    if(win) {
+        tokens += 40;
+        enemies = enemies.filter(e => e.id !== currentEnemy.id);
+        document.getElementById('token-count').innerText = `Tokens: ${tokens}`;
+        showMsg("Victory! +40 Tokens");
+    } else {
+        player.x = 200; player.party.forEach(p => p.hp = p.maxHp);
+        showMsg("Defeat... Returning to start.");
+    }
 }
 
 /**
- * CORE LOOP
+ * GAME LOOP
  */
 function loop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (gameState === 'OVERWORLD') {
-        // Ground
-        ctx.fillStyle = '#113311';
-        ctx.fillRect(0, world.groundY, canvas.width, 100);
+    ctx.clearRect(0,0,800,600);
+    
+    if(gameState === 'OVERWORLD') {
+        // Background
+        ctx.fillStyle = '#020'; ctx.fillRect(0, 0, 800, 600);
+        ctx.fillStyle = '#141'; ctx.fillRect(0, world.groundY, 800, 100);
         
         player.update();
         player.draw();
-
-        enemies.forEach(en => {
-            en.draw();
-            if (Math.abs(player.x - en.x) < 40) startBattle(en);
+        
+        enemies.forEach(e => {
+            e.draw();
+            if(Math.abs(player.x - e.x) < 40) startBattle(e);
         });
-
-        // Instructions
-        ctx.fillStyle = "#555";
-        ctx.fillText("Use Arrow Keys to Move. Walk into enemies to battle.", 20, 580);
-
-    } else if (gameState === 'BATTLE') {
-        // Draw Enemy
-        ctx.fillStyle = currentEnemy.color;
-        ctx.fillRect(500, 150, 150, 150);
-        ctx.fillStyle = 'white';
-        ctx.font = "20px monospace";
-        ctx.fillText(currentEnemy.name, 500, 130);
-        ctx.fillText(`HP: ${currentEnemy.hp}/${currentEnemy.maxHp}`, 500, 330);
-
-        // Draw Party Sprites
-        player.party.forEach((p, i) => {
-            ctx.fillStyle = p.color;
-            ctx.fillRect(100, 80 + (i * 90), 40, 60);
-        });
+    } else {
+        // Battle Scene
+        ctx.fillStyle = '#001'; ctx.fillRect(0,0,800,600);
+        // Draw Large Enemy
+        drawModel(550, 200, 'Endo', 2.5);
+        ctx.fillStyle = '#fff'; ctx.fillText(`${currentEnemy.name} HP: ${currentEnemy.hp}`, 550, 380);
+        // Draw Party
+        player.party.forEach((p, i) => drawModel(150, 50 + (i*100), p.name, 1.2));
     }
-
+    
     frame++;
     requestAnimationFrame(loop);
 }
 
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
-
 loop();
 </script>
 </body>
